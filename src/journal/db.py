@@ -21,7 +21,7 @@ FIELD_TYPES = {
     "water_cups": "REAL",
     "took_creatine": "INTEGER",
     "hit_protein_goal": "INTEGER",
-    "ready_before_bed": "INTEGER",
+    "read_before_bed": "INTEGER",
     "read_devotional": "INTEGER",
     "stretched_before_bed": "INTEGER",
     "cold_plunge": "INTEGER",
@@ -46,6 +46,15 @@ CREATE TABLE IF NOT EXISTS journal_entries (
 """
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """One-off renames that CREATE TABLE IF NOT EXISTS won't retroactively
+    apply to a table that already exists on disk. Each check is a no-op
+    once applied, so this is safe to run on every connect()."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(journal_entries)")}
+    if "ready_before_bed" in columns and "read_before_bed" not in columns:
+        conn.execute("ALTER TABLE journal_entries RENAME COLUMN ready_before_bed TO read_before_bed")
+
+
 @contextmanager
 def connect() -> Iterator[sqlite3.Connection]:
     path = db_path()
@@ -54,6 +63,7 @@ def connect() -> Iterator[sqlite3.Connection]:
     conn.row_factory = sqlite3.Row
     try:
         conn.execute(SCHEMA)
+        _migrate(conn)
         yield conn
         conn.commit()
     finally:

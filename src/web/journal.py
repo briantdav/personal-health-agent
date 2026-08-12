@@ -24,7 +24,7 @@ QUESTIONS: list[Question] = [
     Question("water_cups", "How many cups of water?", "number"),
     Question("took_creatine", "Take creatine?", "bool"),
     Question("hit_protein_goal", "Hit protein goal?", "bool"),
-    Question("ready_before_bed", "Ready before bed?", "bool"),
+    Question("read_before_bed", "Read before bed?", "bool"),
     Question("read_devotional", "Read Bible and devotional in the morning?", "bool"),
     Question("stretched_before_bed", "Stretching before bed?", "bool"),
     Question("cold_plunge", "Cold plunge?", "bool"),

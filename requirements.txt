@@ -1,0 +1,10 @@
+garminconnect
+curl_cffi
+python-dotenv
+pytest
+
+# Dashboard app
+fastapi
+uvicorn
+jinja2
+httpx

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Daily Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <div>
+        <h1>Daily Dashboard</h1>
+        <p class="page-date">{{ metrics.date }}</p>
+      </div>
+      <div class="header-actions">
+        <a class="icon-button icon-button--link" href="/trends" aria-label="Trends">📈</a>
+        <button id="theme-toggle" class="icon-button" type="button" aria-label="Toggle theme">◐</button>
+        <button id="refresh" class="icon-button" type="button" aria-label="Refresh">↻</button>
+      </div>
+    </header>
+
+    <section class="tile-row" aria-label="Today's metrics">
+      <div class="tile">
+        <span class="tile-label">Miles</span>
+        <span class="tile-value">{{ "%.1f"|format(metrics.miles) }}<span class="tile-unit">mi</span></span>
+      </div>
+
+      <div class="tile">
+        <span class="tile-label">Sleep</span>
+        {% if metrics.sleep_hours is not none %}
+          <span class="tile-value">{{ "%.1f"|format(metrics.sleep_hours) }}<span class="tile-unit">hrs</span></span>
+        {% else %}
+          <span class="tile-value tile-value--empty">—</span>
+        {% endif %}
+      </div>
+
+      <div class="tile">
+        <span class="tile-label">Workout time</span>
+        <span class="tile-value">{{ "%.1f"|format(metrics.workout_hours) }}<span class="tile-unit">hrs</span></span>
+      </div>
+
+      <div class="tile">
+        <span class="tile-label">Recovery</span>
+        {% if metrics.recovery_score is not none %}
+          <span class="tile-value">{{ metrics.recovery_score }}</span>
+          <span class="status-badge status-{{ metrics.recovery_status }}">
+            <span class="status-icon" aria-hidden="true"></span>
+            {{ metrics.recovery_level or metrics.recovery_status|capitalize }}
+          </span>
+        {% else %}
+          <span class="tile-value tile-value--empty">—</span>
+          <span class="status-badge status-unknown">
+            <span class="status-icon" aria-hidden="true"></span>
+            No data
+          </span>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="plan-card" aria-label="Today's training plan">
+      <h2>Today's training plan</h2>
+      <p class="plan-summary">{{ metrics.training_plan.summary }}</p>
+      {% if metrics.training_plan.details %}
+        <p class="plan-details">{{ metrics.training_plan.details }}</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <script>
+    const root = document.documentElement;
+    const stored = localStorage.getItem("theme");
+    if (stored) root.setAttribute("data-theme", stored);
+
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+      const current = root.getAttribute("data-theme")
+        || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      const next = current === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      localStorage.setItem("theme", next);
+    });
+
+    document.getElementById("refresh").addEventListener("click", () => location.reload());
+  </script>
+</body>
+</html>

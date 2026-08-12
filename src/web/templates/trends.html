@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trends</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <div>
+        <h1>Trends</h1>
+        <p class="page-date">Last {{ days }} days</p>
+      </div>
+      <div class="header-actions">
+        <a class="icon-button icon-button--link" href="/" aria-label="Dashboard">🏠</a>
+        <button id="theme-toggle" class="icon-button" type="button" aria-label="Toggle theme">◐</button>
+      </div>
+    </header>
+
+    <section class="filter-row" aria-label="Filters">
+      <div class="segmented" role="group" aria-label="Date range">
+        <a class="segmented-option {{ 'active' if days == 30 }}" href="/trends?days=30">30d</a>
+        <a class="segmented-option {{ 'active' if days == 90 }}" href="/trends?days=90">90d</a>
+        <a class="segmented-option {{ 'active' if days == 365 }}" href="/trends?days=365">1y</a>
+      </div>
+      <div class="segmented granularity-toggle" role="group" aria-label="Granularity">
+        <button class="segmented-option active" type="button" data-granularity="daily">Daily</button>
+        <button class="segmented-option" type="button" data-granularity="weekly">Weekly avg</button>
+        <button class="segmented-option" type="button" data-granularity="monthly">Monthly avg</button>
+      </div>
+    </section>
+
+    {% if not trends.has_data %}
+      <section class="empty-state">
+        <h2>No history synced yet</h2>
+        <p>This page reads from a local cache, not Garmin directly, so it stays fast. Populate it once with:</p>
+        <pre><code>python -m src.history.sync --days 365</code></pre>
+        <p class="page-date">
+          Most metrics sync in a handful of API calls, but the recovery score has no bulk
+          endpoint — that part loops one call per day, so a full year takes several minutes.
+        </p>
+      </section>
+    {% else %}
+      <section class="chart-grid" aria-label="Metric trends">
+        {% for key, label in trends.metrics.items() %}
+          <div class="chart-card" data-metric="{{ key }}">
+            <div class="chart-card-header">
+              <span class="chart-label">{{ label }}</span>
+              <span class="chart-latest">—</span>
+            </div>
+            <div class="chart-svg-wrap">
+              <svg viewBox="0 0 600 120" preserveAspectRatio="none" role="img" aria-label="{{ label }} over time"></svg>
+              <div class="chart-tooltip" role="tooltip"></div>
+            </div>
+          </div>
+        {% endfor %}
+      </section>
+
+      <section class="table-section">
+        <button id="toggle-table" class="link-button" type="button" aria-expanded="false" aria-controls="trends-table">
+          View data as a table
+        </button>
+        <div id="trends-table" class="table-scroll" hidden>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                {% for label in trends.metrics.values() %}
+                  <th scope="col">{{ label }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in trends.daily %}
+                <tr>
+                  <td>{{ row.date }}</td>
+                  {% for key in trends.metrics %}
+                    <td>{{ row[key] if row[key] is not none else "—" }}</td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {% endif %}
+  </div>
+
+  <script id="trends-data" type="application/json">{{ trends_json | safe }}</script>
+  <script src="/static/trends.js"></script>
+  <script>
+    const root = document.documentElement;
+    const stored = localStorage.getItem("theme");
+    if (stored) root.setAttribute("data-theme", stored);
+
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+      const current = root.getAttribute("data-theme")
+        || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      const next = current === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      localStorage.setItem("theme", next);
+    });
+  </script>
+</body>
+</html>

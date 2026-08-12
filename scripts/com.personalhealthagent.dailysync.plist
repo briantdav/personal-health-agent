@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Runs src/history/daily_sync.py every 20 minutes, all day. The script
+  itself is a fast no-op outside its 5:30-11:00am window or once today's
+  already synced, so this cadence is cheap — it's what gives us
+  "syncs the moment Garmin has today's data" without a real push/webhook
+  (individuals can't get one — see CLAUDE.md).
+
+  Install (already done for you if Claude Code set this up — see
+  CLAUDE.md's Architecture section):
+      cp scripts/com.personalhealthagent.dailysync.plist \
+         ~/Library/LaunchAgents/com.personalhealthagent.dailysync.plist
+      launchctl load ~/Library/LaunchAgents/com.personalhealthagent.dailysync.plist
+
+  Uninstall:
+      launchctl unload ~/Library/LaunchAgents/com.personalhealthagent.dailysync.plist
+      rm ~/Library/LaunchAgents/com.personalhealthagent.dailysync.plist
+
+  Logs: data/daily_sync.log (gitignored, like the rest of data/).
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.personalhealthagent.dailysync</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/test1/personal-health-agent/.venv/bin/python</string>
+        <string>-m</string>
+        <string>src.history.daily_sync</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/test1/personal-health-agent</string>
+    <key>StartInterval</key>
+    <integer>1200</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/test1/personal-health-agent/data/daily_sync.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/test1/personal-health-agent/data/daily_sync.log</string>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

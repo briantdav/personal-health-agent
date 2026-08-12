@@ -8,15 +8,42 @@ Personal AI Health Agent that analyzes Garmin/Whoop/Coros data along with a morn
 
 ## Current state
 
-This repository is a bare skeleton — most files exist but are empty, and no dependencies, build tooling, tests, or commands have been established yet:
+Garmin data ingestion, a daily dashboard, a year-of-history trends page, and an automatic daily sync (via `launchd`, see Architecture) exist; `src/agent.py` (the intended orchestrator/recommendation entrypoint) is still an empty placeholder, as is Whoop/Coros integration, the morning journal, and nutrition. The planned shape for those: the daily sync stays a scheduled/deterministic job (no LLM involved), but morning-journal → insights will need to be a *user-triggered* flow (e.g. a dashboard form that calls the Claude API on submit) rather than another scheduled job, since it depends on text only the user can write each morning.
 
-- `src/agent.py`, `src/tools/__init__.py`, `src/__init__.py`, `tests/__init__.py` — empty placeholder files
-- `requirements.txt` — empty (no Python dependencies pinned yet)
-- `.env.example` — empty (no environment variables documented yet)
-- `data/` — empty directory (`.gitkeep` only), presumably intended for local health data exports (Garmin/Whoop/Coros) and journal entries
+## Commands
 
-There is no build, lint, or test command to run yet because no code or tooling has been added. When adding the first real implementation, also establish and document these commands here (e.g. how to install dependencies, run the agent, and run tests) so future sessions don't have to rediscover them.
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-## Architecture notes
+pytest tests/ -v                        # run the test suite
+pytest tests/test_metrics.py -v         # run a single test file
+uvicorn src.web.app:app --reload        # run the dashboard at http://127.0.0.1:8000 (/ and /trends)
+python -m src.tools.garmin              # print today's raw Garmin snapshot as JSON (auth smoke test)
+python -m src.history.sync --days 365   # backfill data/history.db for the /trends page (see below — slow)
+python -m src.history.daily_sync --force  # on-demand equivalent of the automatic daily sync
+```
 
-The intended shape, based on the directory layout, is a `src/agent.py` entrypoint that orchestrates calls into `src/tools/` (presumably per-data-source integrations such as Garmin/Whoop/Coros clients and journal parsing) to produce training/nutrition recommendations. `.env.example` implies API credentials/config will be loaded from environment variables — check there first for what integrations expect before adding new ones. As this fills in, update this section with the real data flow (how data sources are pulled/parsed, how the journal is ingested, and how recommendations are generated) rather than a per-file inventory.
+First run of anything that touches Garmin will prompt interactively for email/password/MFA (or read `GARMIN_EMAIL`/`GARMIN_PASSWORD` from `.env` — copy `.env.example`). OAuth tokens are then cached to `~/.garminconnect` (or `GARMINTOKENS`) so subsequent runs don't re-prompt.
+
+## Architecture
+
+**Garmin has no self-serve API for individuals** — the Connect Developer Health API requires applying as a legal entity. `src/tools/garmin.py` works around this with the unofficial [`python-garminconnect`](https://github.com/cyberjunky/python-garminconnect) library, logging in as your own Garmin Connect account the way the mobile app does. This is the pattern for any future per-source integration (Whoop/Coros): a thin wrapper module in `src/tools/` around whatever unofficial or official client exists, exposing plain functions keyed by date rather than raw API responses.
+
+Layers, in order of raw → shaped → presented:
+
+1. **`src/tools/garmin.py`** — raw Garmin Connect data.
+   - Single-day functions (`get_sleep`, `get_hrv`, `get_training_readiness`, ...) accept an optional `date | str | None`, normalized via `to_iso_date`. `get_daily_health_snapshot()` aggregates everything for one day, catching `GARMIN_ERRORS` per-endpoint so one flaky endpoint doesn't take the rest down — reuse that tuple (and that catch-per-field pattern) for any new aggregate rather than catching bare `Exception`.
+   - Bulk-range functions (`get_sleep_range`, `get_rhr_range`, `get_hrv_range`, `get_vo2max_range`, `get_body_battery_range`, `get_activities_range`) exist because Garmin has genuine range endpoints for these — one call covers up to ~a year. **Training readiness/recovery has no range endpoint**; pulling its history means one call per day (see `src/history/sync.py`).
+2. **`src/history/`** — the local cache the trends page reads from, so a year of daily data across ~10 metrics doesn't mean hitting Garmin (slowly, and rate-limit-riskily) on every page load.
+   - `db.py` — SQLite (`data/history.db`, gitignored), one row per calendar date, columns nullable (a day with no logged activity is `NULL`, not `0`). `upsert_day()` merges fields from different syncers without clobbering columns it wasn't given.
+   - `sync.py` — orchestrates a backfill over an arbitrary date range: bulk-range calls for most metrics, plus the slow paced per-day loop for recovery (commits every 10 days, so `Ctrl+C` mid-backfill doesn't lose progress). Run via `python -m src.history.sync`.
+   - `daily_sync.py` — **the automatic daily sync**. Garmin has no push/webhook for individual accounts (the official Health API partner program that supports push is business/legal-entity only), so this approximates one: a `launchd` job (installed from `scripts/com.personalhealthagent.dailysync.plist` into `~/Library/LaunchAgents/`) invokes it every 20 minutes between 5:30–11:00am. Each invocation is a cheap, idempotent no-op unless it's both in-window *and* today isn't synced yet *and* Garmin actually has today's sleep data — so frequent invocation is fine, and there's no long-lived polling process to keep alive across sleep/wake. Logs to `data/daily_sync.log` (silent when it no-ops). Manual on-demand equivalent: `python -m src.history.daily_sync --force`. See the `garmin-sync` skill (`.claude/skills/garmin-sync/`) for the full on-demand/troubleshooting command set.
+3. **`src/web/metrics.py`** — today's dashboard view model: unit conversions (meters→miles, seconds→hours) and status bucketing (`_recovery_status`). `get_todays_training_plan()` is a placeholder — where `src/agent.py`'s real recommendation logic should eventually plug in.
+4. **`src/web/trends.py`** — reads `src/history/db.py`, fills date gaps with `None`, forward-fills VO2 max (Garmin only emits a new reading occasionally, not daily), and rolls up into weekly/monthly series. Volume metrics (`miles`, `workout_hours`, in `SUM_METRICS`) aggregate as a **sum** ("weekly mileage"); everything else averages — mislabeling a runner's weekly mileage as a daily average would be actively misleading.
+5. **`src/web/app.py`** — FastAPI app.
+   - `/` + `/api/metrics` — today's dashboard (stat tiles + training-plan card).
+   - `/trends` + `/api/trends` — small-multiple line charts (`src/web/static/trends.js`, vanilla SVG, no charting library), one per metric, with a Daily/Weekly/Monthly toggle and a collapsible data table (the WCAG-clean fallback). Shows an empty-state pointing at the sync command if `data/history.db` hasn't been populated yet.
+   - Styling in `src/web/static/style.css` follows this repo's data-viz conventions: light/dark via `data-theme` + `prefers-color-scheme`, status colors reserved for state (never a categorical color), single-hue accent line + recessive hairline gridlines for charts.
+
+`data/` (including `history.db`) is gitignored except `.gitkeep` — never commit real data there.

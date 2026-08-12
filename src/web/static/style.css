@@ -11,6 +11,7 @@
   --border: rgba(11, 11, 11, 0.1);
   --accent: #2a78d6;
   --gridline: #e1e0d9;
+  --delta-good: #006300;
 
   --status-good: #0ca30c;
   --status-warning: #fab219;
@@ -30,6 +31,7 @@
     --border: rgba(255, 255, 255, 0.1);
     --accent: #3987e5;
     --gridline: #2c2c2a;
+    --delta-good: #0ca30c;
 
     --status-good: #0ca30c;
     --status-warning: #fab219;
@@ -48,6 +50,7 @@
   --border: rgba(255, 255, 255, 0.1);
   --accent: #3987e5;
   --gridline: #2c2c2a;
+  --delta-good: #0ca30c;
 }
 
 * {
@@ -84,6 +87,11 @@ body {
   margin: 4px 0 0;
   color: var(--text-secondary);
   font-size: 0.95rem;
+}
+
+.page-date--secondary {
+  color: var(--text-muted);
+  font-size: 0.8rem;
 }
 
 .header-actions {
@@ -462,6 +470,47 @@ thead th {
   font-weight: 400;
   color: var(--text-secondary);
   margin-left: 4px;
+}
+
+/* --- Trend chips (7d/30d totals or vs-average comparisons on a tile) --- */
+
+.trend-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.trend-chip {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: proportional-nums;
+}
+
+.trend-chip.trend-up {
+  color: var(--delta-good);
+}
+
+/* --- A second metric folded into a tile (sleep score inside Sleep,
+   HRV inside Recovery) rather than its own tile --- */
+
+.tile-submetric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.tile-sublabel {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.tile-subvalue {
+  font-size: 1.1rem;
+  font-weight: 600;
+  font-variant-numeric: proportional-nums;
 }
 
 .status-badge {

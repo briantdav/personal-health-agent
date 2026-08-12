@@ -47,19 +47,42 @@ def test_sync_sleep_extracts_score_deep_rem_rhr_hrv(mock_sleep_range):
 
 
 @patch("src.tools.garmin.get_activities_range")
-def test_sync_activities_sums_per_day(mock_activities):
+def test_sync_activities_sums_running_miles_but_all_workout_time(mock_activities):
     mock_activities.return_value = [
-        {"startTimeLocal": "2026-08-11 17:13:14", "distance": 0.0, "duration": 3694.47},  # strength
-        {"startTimeLocal": "2026-08-11 05:37:13", "distance": 16103.1, "duration": 4374.45},  # run
-        {"startTimeLocal": "2026-08-10 06:25:10", "distance": 9670.1, "duration": 2831.67},
+        {
+            "startTimeLocal": "2026-08-11 17:13:14",
+            "distance": 0.0,
+            "duration": 3694.47,
+            "activityType": {"typeId": 13, "typeKey": "strength_training", "parentTypeId": 29},
+        },
+        {
+            "startTimeLocal": "2026-08-11 05:37:13",
+            "distance": 16103.1,
+            "duration": 4374.45,
+            "activityType": {"typeId": 1, "typeKey": "running", "parentTypeId": 17},
+        },
+        {
+            "startTimeLocal": "2026-08-11 09:00:00",
+            "distance": 4772.87,  # a round of golf's GPS track — not running mileage
+            "duration": 8414.91,
+            "activityType": {"typeId": 88, "typeKey": "golf", "parentTypeId": 4},
+        },
+        {
+            "startTimeLocal": "2026-08-10 06:25:10",
+            "distance": 9670.1,
+            "duration": 2831.67,
+            "activityType": {"typeId": 1, "typeKey": "running", "parentTypeId": 17},
+        },
     ]
 
     with db.connect() as conn:
         sync._sync_activities(conn, "2026-08-10", "2026-08-11")
 
     rows = {r["date"]: r for r in db.get_range("2026-08-10", "2026-08-11")}
+    # Golf's distance is excluded from miles...
     assert rows["2026-08-11"]["miles"] == pytest.approx(10.01, abs=0.01)
-    assert rows["2026-08-11"]["workout_hours"] == pytest.approx(2.24, abs=0.01)
+    # ...but its duration still counts toward total workout time, alongside strength + the run.
+    assert rows["2026-08-11"]["workout_hours"] == pytest.approx(4.58, abs=0.01)
     assert rows["2026-08-10"]["miles"] == pytest.approx(6.01, abs=0.01)
 
 

@@ -99,7 +99,13 @@ def _sync_body_battery(conn, start: str, end: str) -> None:
 
 
 def _sync_activities(conn, start: str, end: str) -> None:
-    """Sums distance/duration per calendar day across all activities that day."""
+    """Sums running distance and total workout duration per calendar day.
+
+    Miles counts only Garmin's running family (see garmin.is_running_activity)
+    — golf, walks, rides etc. don't count as running mileage even though
+    they carry a GPS distance. Workout time counts every activity type;
+    it's "time spent training", not "time spent running".
+    """
     totals: dict[str, dict[str, float]] = {}
     for activity in garmin.get_activities_range(start, end):
         start_local = activity.get("startTimeLocal") or ""
@@ -107,7 +113,8 @@ def _sync_activities(conn, start: str, end: str) -> None:
         if not cal_date:
             continue
         bucket = totals.setdefault(cal_date, {"meters": 0.0, "seconds": 0.0})
-        bucket["meters"] += activity.get("distance") or 0
+        if garmin.is_running_activity(activity):
+            bucket["meters"] += activity.get("distance") or 0
         bucket["seconds"] += activity.get("duration") or 0
 
     for cal_date, totals_for_day in totals.items():

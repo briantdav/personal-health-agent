@@ -137,6 +137,16 @@ def get_activities_for_date(day: date | str | None = None) -> list[dict[str, Any
     return get_client().get_activities_by_date(cdate, cdate)
 
 
+def is_running_activity(activity: dict[str, Any]) -> bool:
+    """True for Garmin's whole running family — running itself (typeId 1)
+    plus its children (treadmill/trail/track/indoor running, ..., all
+    carrying parentTypeId 1) — false for golf, walking, cycling, strength,
+    etc. Used to compute "running miles" as distinct from total activity
+    distance (which would double-count e.g. a round of golf's GPS track)."""
+    activity_type = activity.get("activityType") or {}
+    return activity_type.get("typeId") == 1 or activity_type.get("parentTypeId") == 1
+
+
 # --- Bulk-range endpoints, for pulling history (see src/history/sync.py) ---
 #
 # Garmin has genuine range endpoints for these, unlike the single-day

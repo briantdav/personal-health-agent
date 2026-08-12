@@ -7,11 +7,36 @@
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
+  {% macro trend_symbol(trend) -%}
+    {%- if trend == "up" -%}▲{%- elif trend == "down" -%}▼{%- else -%}–{%- endif -%}
+  {%- endmacro %}
+
+  {% macro trend_chips(trend) %}
+    {% if trend and (trend.avg_7d is not none or trend.avg_30d is not none) %}
+      <div class="trend-row">
+        {% if trend.avg_7d is not none %}
+          <span class="trend-chip trend-{{ trend.trend_7d or 'flat' }}">{{ trend_symbol(trend.trend_7d) }} 7d {{ trend.avg_7d }}</span>
+        {% endif %}
+        {% if trend.avg_30d is not none %}
+          <span class="trend-chip trend-{{ trend.trend_30d or 'flat' }}">{{ trend_symbol(trend.trend_30d) }} 30d {{ trend.avg_30d }}</span>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% endmacro %}
+
+  {% macro totals_chips(totals, unit) %}
+    <div class="trend-row">
+      <span class="trend-chip">7d {{ totals.total_7d }}{{ unit }}</span>
+      <span class="trend-chip">30d {{ totals.total_30d }}{{ unit }}</span>
+    </div>
+  {% endmacro %}
+
   <div class="page">
     <header class="page-header">
       <div>
         <h1>Daily Dashboard</h1>
         <p class="page-date">{{ metrics.date }}</p>
+        <p class="page-date page-date--secondary">Miles &amp; workout time from {{ metrics.activity_date }}</p>
       </div>
       <div class="header-actions">
         <button id="journal-open" class="icon-button" type="button" aria-label="Morning journal">📝</button>
@@ -21,10 +46,17 @@
       </div>
     </header>
 
-    <section class="tile-row" aria-label="Today's metrics">
+    <section class="tile-row" aria-label="Yesterday's activity and today's recovery">
       <div class="tile">
-        <span class="tile-label">Miles</span>
+        <span class="tile-label">Miles (yesterday)</span>
         <span class="tile-value">{{ "%.1f"|format(metrics.miles) }}<span class="tile-unit">mi</span></span>
+        {{ totals_chips(metrics.miles_totals, "mi") }}
+      </div>
+
+      <div class="tile">
+        <span class="tile-label">Workout time (yesterday)</span>
+        <span class="tile-value">{{ "%.1f"|format(metrics.workout_hours) }}<span class="tile-unit">hrs</span></span>
+        {{ totals_chips(metrics.workout_hours_totals, "h") }}
       </div>
 
       <div class="tile">
@@ -34,11 +66,12 @@
         {% else %}
           <span class="tile-value tile-value--empty">—</span>
         {% endif %}
-      </div>
-
-      <div class="tile">
-        <span class="tile-label">Workout time</span>
-        <span class="tile-value">{{ "%.1f"|format(metrics.workout_hours) }}<span class="tile-unit">hrs</span></span>
+        {{ trend_chips(metrics.sleep_hours_trend) }}
+        <div class="tile-submetric">
+          <span class="tile-sublabel">Sleep score</span>
+          <span class="tile-subvalue">{{ metrics.sleep_score if metrics.sleep_score is not none else "—" }}</span>
+        </div>
+        {{ trend_chips(metrics.sleep_score_trend) }}
       </div>
 
       <div class="tile">
@@ -56,6 +89,12 @@
             No data
           </span>
         {% endif %}
+        {{ trend_chips(metrics.recovery_score_trend) }}
+        <div class="tile-submetric">
+          <span class="tile-sublabel">HRV</span>
+          <span class="tile-subvalue">{{ metrics.hrv if metrics.hrv is not none else "—" }}</span>
+        </div>
+        {{ trend_chips(metrics.hrv_trend) }}
       </div>
     </section>
 

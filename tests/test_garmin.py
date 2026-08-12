@@ -7,6 +7,8 @@ needed to run the suite.
 from datetime import date
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.tools import garmin
 
 
@@ -70,6 +72,24 @@ def test_get_body_battery_range_single_chunk_for_short_range(mock_get_client):
     garmin.get_body_battery_range("2026-08-01", "2026-08-12")
 
     mock_client.get_body_battery.assert_called_once_with("2026-08-01", "2026-08-12")
+
+
+@pytest.mark.parametrize(
+    "activity_type,expected",
+    [
+        ({"typeId": 1, "typeKey": "running", "parentTypeId": 17}, True),
+        ({"typeId": 18, "typeKey": "treadmill_running", "parentTypeId": 1}, True),
+        ({"typeId": 88, "typeKey": "golf", "parentTypeId": 4}, False),
+        ({"typeId": 13, "typeKey": "strength_training", "parentTypeId": 29}, False),
+        ({}, False),
+    ],
+)
+def test_is_running_activity(activity_type, expected):
+    assert garmin.is_running_activity({"activityType": activity_type}) is expected
+
+
+def test_is_running_activity_missing_activity_type():
+    assert garmin.is_running_activity({}) is False
 
 
 @patch("src.tools.garmin.get_client")

@@ -20,14 +20,25 @@ client = TestClient(app)
 def isolated_db(tmp_path, monkeypatch):
     monkeypatch.setenv("HISTORY_DB_PATH", str(tmp_path / "test_history.db"))
 
+_NO_TREND = {"avg_7d": None, "avg_30d": None, "trend_7d": None, "trend_30d": None}
+
 FAKE_METRICS = {
     "date": "2026-08-12",
+    "activity_date": "2026-08-11",
     "miles": 4.2,
-    "sleep_hours": 7.5,
+    "miles_totals": {"total_7d": 18.5, "total_30d": 62.0},
     "workout_hours": 0.75,
+    "workout_hours_totals": {"total_7d": 5.25, "total_30d": 20.0},
+    "sleep_hours": 7.5,
+    "sleep_hours_trend": {"avg_7d": 7.1, "avg_30d": 6.9, "trend_7d": "up", "trend_30d": "up"},
+    "sleep_score": 78,
+    "sleep_score_trend": {"avg_7d": 74, "avg_30d": 73, "trend_7d": "up", "trend_30d": "up"},
     "recovery_score": 82,
     "recovery_level": "HIGH",
     "recovery_status": "good",
+    "recovery_score_trend": {"avg_7d": 65, "avg_30d": 60, "trend_7d": "up", "trend_30d": "up"},
+    "hrv": 80,
+    "hrv_trend": _NO_TREND,
     "training_plan": {"summary": "Rest day.", "details": None},
 }
 
@@ -39,6 +50,8 @@ def test_dashboard_renders_metrics(mock_metrics):
     assert response.status_code == 200
     assert "4.2" in response.text
     assert "Rest day." in response.text
+    assert "78" in response.text  # sleep score, folded into the Sleep tile
+    assert "80" in response.text  # HRV, folded into the Recovery tile
 
 
 @patch("src.web.app.get_dashboard_metrics", return_value=FAKE_METRICS)

@@ -14,6 +14,7 @@
         <p class="page-date">{{ metrics.date }}</p>
       </div>
       <div class="header-actions">
+        <button id="journal-open" class="icon-button" type="button" aria-label="Morning journal">📝</button>
         <a class="icon-button icon-button--link" href="/trends" aria-label="Trends">📈</a>
         <button id="theme-toggle" class="icon-button" type="button" aria-label="Toggle theme">◐</button>
         <button id="refresh" class="icon-button" type="button" aria-label="Refresh">↻</button>
@@ -66,6 +67,90 @@
       {% endif %}
     </section>
   </div>
+
+  <div id="journal-modal" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="journal-title">
+      <div class="modal-header">
+        <h2 id="journal-title">Morning check-in</h2>
+        <button id="journal-close" class="icon-button" type="button" aria-label="Close">✕</button>
+      </div>
+      <form id="journal-form">
+        <input type="hidden" name="entry_date" value="{{ metrics.date }}" />
+        <div class="habit-list">
+          {% for q in journal_questions %}
+            <div class="habit-row" data-key="{{ q.key }}"{% if q.show_if %} data-show-if="{{ q.show_if }}"{% endif %}>
+              <label for="field-{{ q.key }}">{{ q.label }}</label>
+              {% if q.kind == "bool" %}
+                <input type="checkbox" id="field-{{ q.key }}" name="{{ q.key }}" {{ "checked" if journal_values[q.key] }} />
+              {% elif q.kind == "number" %}
+                <input type="number" id="field-{{ q.key }}" name="{{ q.key }}" step="0.5" min="0" inputmode="decimal"
+                       value="{{ journal_values[q.key] if journal_values[q.key] is not none else '' }}" />
+              {% elif q.kind == "time" %}
+                <input type="time" id="field-{{ q.key }}" name="{{ q.key }}" value="{{ journal_values[q.key] or '' }}" />
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="journal-dismiss" class="link-button">Not now</button>
+          <span id="journal-saved-note" class="page-date" hidden>Saved</span>
+          <button type="submit" class="primary-button">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const modal = document.getElementById("journal-modal");
+      const form = document.getElementById("journal-form");
+      const savedNote = document.getElementById("journal-saved-note");
+      const entryDate = form.entry_date.value;
+      const dismissKey = `journal-dismissed-${entryDate}`;
+
+      const openModal = () => { modal.hidden = false; };
+      const closeModal = () => { modal.hidden = true; };
+
+      document.getElementById("journal-open").addEventListener("click", openModal);
+      document.getElementById("journal-close").addEventListener("click", closeModal);
+      document.getElementById("journal-dismiss").addEventListener("click", () => {
+        localStorage.setItem(dismissKey, "1");
+        closeModal();
+      });
+
+      // Conditional rows (drink count / time of last drink only matter if
+      // "Drink alcohol?" is checked) — wire up show/hide per parent key.
+      const parentKeys = new Set(
+        Array.from(form.querySelectorAll("[data-show-if]")).map((row) => row.dataset.showIf)
+      );
+      parentKeys.forEach((parentKey) => {
+        const parentInput = form.querySelector(`[name="${parentKey}"]`);
+        if (!parentInput) return;
+        const dependents = form.querySelectorAll(`[data-show-if="${parentKey}"]`);
+        const sync = () => dependents.forEach((row) => { row.hidden = !parentInput.checked; });
+        parentInput.addEventListener("change", sync);
+        sync();
+      });
+
+      form.addEventListener("submit", async (evt) => {
+        evt.preventDefault();
+        const response = await fetch("/journal", { method: "POST", body: new FormData(form) });
+        if (response.ok) {
+          localStorage.setItem(dismissKey, "1");
+          savedNote.hidden = false;
+          setTimeout(() => {
+            savedNote.hidden = true;
+            closeModal();
+          }, 700);
+        }
+      });
+
+      const alreadySubmitted = {{ "true" if journal_already_submitted else "false" }};
+      if (!alreadySubmitted && !localStorage.getItem(dismissKey)) {
+        openModal();
+      }
+    })();
+  </script>
 
   <script>
     const root = document.documentElement;

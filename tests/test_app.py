@@ -1,16 +1,24 @@
 """Tests for the FastAPI dashboard app (src/web/app.py).
 
-Patches get_dashboard_metrics so no network calls or real credentials are
-needed to run the suite.
+Patches get_dashboard_metrics/get_trends so no network calls or real
+credentials are needed to run the suite. Journal routes hit the real
+src/journal storage against an isolated tmp-path DB instead, since that's
+cheap and exercises the actual save/read path end to end.
 """
 
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from src.web.app import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolated_db(tmp_path, monkeypatch):
+    monkeypatch.setenv("HISTORY_DB_PATH", str(tmp_path / "test_history.db"))
 
 FAKE_METRICS = {
     "date": "2026-08-12",
@@ -76,3 +84,50 @@ def test_api_trends_returns_json(mock_trends):
     assert response.status_code == 200
     assert response.json() == FAKE_TRENDS
     mock_trends.assert_called_once_with(30)
+
+
+@patch("src.web.app.get_dashboard_metrics", return_value=FAKE_METRICS)
+def test_dashboard_renders_journal_modal_with_all_questions(mock_metrics):
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'id="journal-modal"' in response.text
+    assert "How many cups of water?" in response.text
+    assert "Time of last drink" in response.text
+
+
+def test_journal_submit_saves_and_is_reflected_on_next_dashboard_load():
+    response = client.post(
+        "/journal",
+        data={
+            "entry_date": "2026-08-12",
+            "water_cups": "6",
+            "took_creatine": "on",
+            "drank_alcohol": "on",
+            "drink_count": "2",
+            "last_drink_time": "21:30",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "date": "2026-08-12"}
+
+    from src.web import journal
+
+    values = journal.get_values("2026-08-12")
+    assert values["water_cups"] == 6.0
+    assert values["took_creatine"] == 1
+    assert values["drink_count"] == 2.0
+    assert journal.already_submitted("2026-08-12") is True
+
+
+def test_journal_submit_unchecked_boxes_save_as_false():
+    response = client.post("/journal", data={"entry_date": "2026-08-12", "water_cups": "4"})
+
+    assert response.status_code == 200
+
+    from src.web import journal
+
+    values = journal.get_values("2026-08-12")
+    assert values["took_creatine"] == 0
+    assert values["drank_alcohol"] == 0

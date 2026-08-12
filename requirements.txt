@@ -8,3 +8,4 @@ fastapi
 uvicorn
 jinja2
 httpx
+python-multipart  # request.form() parsing, used by the journal submit route

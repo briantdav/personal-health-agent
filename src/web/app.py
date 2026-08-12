@@ -6,12 +6,15 @@ Run with: uvicorn src.web.app:app --reload
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from src.web import journal
 from src.web.metrics import get_dashboard_metrics
 from src.web.trends import get_trends
 
@@ -25,7 +28,24 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 @app.get("/")
 def dashboard(request: Request):
     metrics = get_dashboard_metrics()
-    return templates.TemplateResponse(request, "dashboard.html", {"metrics": metrics})
+    return templates.TemplateResponse(
+        request,
+        "dashboard.html",
+        {
+            "metrics": metrics,
+            "journal_questions": journal.QUESTIONS,
+            "journal_values": journal.get_values(),
+            "journal_already_submitted": journal.already_submitted(),
+        },
+    )
+
+
+@app.post("/journal")
+async def journal_submit(request: Request):
+    form = dict(await request.form())
+    entry_date = form.pop("entry_date", None) or date.today().isoformat()
+    journal.save_entry(entry_date, form)
+    return JSONResponse({"ok": True, "date": entry_date})
 
 
 @app.get("/api/metrics")

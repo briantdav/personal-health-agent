@@ -83,6 +83,36 @@ def test_recovery_status_bands():
     assert metrics._recovery_status(None) is None
 
 
+@pytest.mark.parametrize(
+    "value,status,label",
+    [(95, "good", "Excellent"), (90, "good", "Excellent"), (80, "warning", "Good"),
+     (65, "serious", "Fair"), (40, "critical", "Poor")],
+)
+def test_ring_band(value, status, label):
+    assert metrics._ring_band(value) == {"status": status, "label": label}
+
+
+def test_ring_band_none_is_unknown():
+    assert metrics._ring_band(None) == {"status": "unknown", "label": None}
+
+
+def test_rem_and_deep_sleep_hours():
+    sleep_data = {"dailySleepDTO": {"remSleepSeconds": 2100, "deepSleepSeconds": 3600}}
+    assert metrics._rem_and_deep_sleep_hours(sleep_data) == (0.6, 1.0)
+
+
+def test_rem_and_deep_sleep_hours_missing_is_none():
+    assert metrics._rem_and_deep_sleep_hours({}) == (None, None)
+
+
+def test_body_battery_value_reads_highest_value():
+    assert metrics._body_battery_value({"bodyBatteryHighestValue": 96}) == 96
+
+
+def test_body_battery_value_missing_is_none():
+    assert metrics._body_battery_value({}) is None
+
+
 def _seed(*days):
     with history_db.connect() as conn:
         for iso_date, fields in days:
@@ -116,39 +146,49 @@ def test_trend(value, avg, expected):
 
 
 @patch("src.tools.garmin.get_morning_recovery")
+@patch("src.tools.garmin.get_daily_summary")
 @patch("src.tools.garmin.get_hrv")
 @patch("src.tools.garmin.get_sleep")
 @patch("src.tools.garmin.get_activities_for_date")
 def test_get_dashboard_metrics_pulls_activities_for_the_day_before(
-    mock_activities, mock_sleep, mock_hrv, mock_recovery
+    mock_activities, mock_sleep, mock_hrv, mock_summary, mock_recovery
 ):
     mock_activities.return_value = []
     mock_sleep.return_value = {}
     mock_hrv.return_value = None
+    mock_summary.return_value = {}
     mock_recovery.return_value = None
 
     metrics.get_dashboard_metrics("2026-08-12")
 
     mock_activities.assert_called_once_with("2026-08-11")
-    # Sleep/HRV/recovery stay keyed to the passed-in day (Garmin already
-    # attributes the overnight reading to the wake-up date).
+    # Sleep/HRV/body battery/recovery stay keyed to the passed-in day
+    # (Garmin already attributes the overnight reading to the wake-up date).
     mock_sleep.assert_called_once_with("2026-08-12")
     mock_hrv.assert_called_once_with("2026-08-12")
+    mock_summary.assert_called_once_with("2026-08-12")
     mock_recovery.assert_called_once_with("2026-08-12")
 
 
 @patch("src.tools.garmin.get_morning_recovery")
+@patch("src.tools.garmin.get_daily_summary")
 @patch("src.tools.garmin.get_hrv")
 @patch("src.tools.garmin.get_sleep")
 @patch("src.tools.garmin.get_activities_for_date")
 def test_get_dashboard_metrics_aggregates_everything(
-    mock_activities, mock_sleep, mock_hrv, mock_recovery
+    mock_activities, mock_sleep, mock_hrv, mock_summary, mock_recovery
 ):
     mock_activities.return_value = [{"distance": 1609.344, "duration": 600, "activityType": RUNNING}]
     mock_sleep.return_value = {
-        "dailySleepDTO": {"sleepTimeSeconds": 25200, "sleepScores": {"overall": {"value": 76}}}
+        "dailySleepDTO": {
+            "sleepTimeSeconds": 25200,
+            "remSleepSeconds": 2100,
+            "deepSleepSeconds": 3600,
+            "sleepScores": {"overall": {"value": 76}},
+        }
     }
     mock_hrv.return_value = {"hrvSummary": {"lastNightAvg": 80}}
+    mock_summary.return_value = {"bodyBatteryHighestValue": 96}
     mock_recovery.return_value = {"score": 82, "level": "HIGH"}
 
     # 2026-07-20 is within the 30d window ending 2026-08-11 (starts 07-13)
@@ -163,25 +203,32 @@ def test_get_dashboard_metrics_aggregates_everything(
     assert result["miles_totals"] == {"total_7d": 0.0, "total_30d": 3.0}
     assert result["sleep_hours"] == 7.0
     assert result["sleep_score"] == 76
+    assert result["sleep_score_band"] == {"status": "warning", "label": "Good"}
     assert result["sleep_score_trend"]["avg_30d"] == 70
     assert result["sleep_score_trend"]["trend_30d"] == "up"
+    assert result["rem_sleep_hours"] == 0.6
+    assert result["deep_sleep_hours"] == 1.0
     assert result["hrv"] == 80
     assert result["recovery_score"] == 82
     assert result["recovery_level"] == "HIGH"
     assert result["recovery_status"] == "good"
+    assert result["body_battery"] == 96
+    assert result["body_battery_band"] == {"status": "good", "label": "Excellent"}
     assert "training_plan" in result
 
 
 @patch("src.tools.garmin.get_morning_recovery")
+@patch("src.tools.garmin.get_daily_summary")
 @patch("src.tools.garmin.get_hrv")
 @patch("src.tools.garmin.get_sleep")
 @patch("src.tools.garmin.get_activities_for_date")
 def test_get_dashboard_metrics_degrades_on_endpoint_errors(
-    mock_activities, mock_sleep, mock_hrv, mock_recovery
+    mock_activities, mock_sleep, mock_hrv, mock_summary, mock_recovery
 ):
     mock_activities.side_effect = garmin.GarminConnectConnectionError("boom")
     mock_sleep.side_effect = garmin.GarminConnectConnectionError("boom")
     mock_hrv.side_effect = garmin.GarminConnectConnectionError("boom")
+    mock_summary.side_effect = garmin.GarminConnectConnectionError("boom")
     mock_recovery.side_effect = garmin.GarminConnectConnectionError("boom")
 
     result = metrics.get_dashboard_metrics("2026-08-12")
@@ -189,6 +236,10 @@ def test_get_dashboard_metrics_degrades_on_endpoint_errors(
     assert result["miles"] == 0
     assert result["sleep_hours"] is None
     assert result["sleep_score"] is None
+    assert result["rem_sleep_hours"] is None
+    assert result["deep_sleep_hours"] is None
     assert result["hrv"] is None
     assert result["recovery_score"] is None
     assert result["recovery_status"] is None
+    assert result["body_battery"] is None
+    assert result["body_battery_band"] == {"status": "unknown", "label": None}

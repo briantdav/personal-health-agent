@@ -6,12 +6,13 @@ src/journal storage against an isolated tmp-path DB instead, since that's
 cheap and exercises the actual save/read path end to end.
 """
 
+from datetime import datetime
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from src.web.app import app
+from src.web.app import app, greeting
 
 client = TestClient(app)
 
@@ -19,6 +20,21 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
     monkeypatch.setenv("HISTORY_DB_PATH", str(tmp_path / "test_history.db"))
+
+
+@pytest.mark.parametrize(
+    "hour,period",
+    [(6, "morning"), (11, "morning"), (12, "afternoon"), (16, "afternoon"), (17, "evening"), (23, "evening")],
+)
+def test_greeting_period_by_hour(hour, period, monkeypatch):
+    monkeypatch.setenv("USER_NAME", "Brian")
+    assert greeting(datetime(2026, 8, 12, hour, 0)) == f"Good {period}, Brian"
+
+
+def test_greeting_omits_name_when_unset(monkeypatch):
+    monkeypatch.delenv("USER_NAME", raising=False)
+    assert greeting(datetime(2026, 8, 12, 9, 0)) == "Good morning"
+
 
 _NO_TREND = {"avg_7d": None, "avg_30d": None, "trend_7d": None, "trend_30d": None}
 
@@ -32,11 +48,16 @@ FAKE_METRICS = {
     "sleep_hours": 7.5,
     "sleep_hours_trend": {"avg_7d": 7.1, "avg_30d": 6.9, "trend_7d": "up", "trend_30d": "up"},
     "sleep_score": 78,
+    "sleep_score_band": {"status": "warning", "label": "Good"},
     "sleep_score_trend": {"avg_7d": 74, "avg_30d": 73, "trend_7d": "up", "trend_30d": "up"},
+    "rem_sleep_hours": 0.9,
+    "deep_sleep_hours": 1.7,
     "recovery_score": 82,
     "recovery_level": "HIGH",
     "recovery_status": "good",
     "recovery_score_trend": {"avg_7d": 65, "avg_30d": 60, "trend_7d": "up", "trend_30d": "up"},
+    "body_battery": 96,
+    "body_battery_band": {"status": "good", "label": "Excellent"},
     "hrv": 80,
     "hrv_trend": _NO_TREND,
     "training_plan": {"summary": "Rest day.", "details": None},
@@ -48,10 +69,17 @@ def test_dashboard_renders_metrics(mock_metrics):
     response = client.get("/")
 
     assert response.status_code == 200
+    assert "Personal Health Portal" in response.text
+    assert "Good " in response.text  # the time-of-day greeting
+    assert "Sleep &amp; Recovery Snapshot" in response.text
+    assert "Yesterday's Recap" in response.text
+    assert "Total Activity" in response.text
     assert "4.2" in response.text
     assert "Rest day." in response.text
-    assert "78" in response.text  # sleep score, folded into the Sleep tile
-    assert "80" in response.text  # HRV, folded into the Recovery tile
+    assert "78" in response.text  # sleep score, in the ring on the Sleep tile
+    assert "80" in response.text  # HRV, its own tile
+    assert "96" in response.text  # body battery, in the ring on the Recovery tile
+    assert "Excellent" in response.text  # body battery band label
 
 
 @patch("src.web.app.get_dashboard_metrics", return_value=FAKE_METRICS)

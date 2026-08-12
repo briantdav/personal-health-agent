@@ -89,9 +89,10 @@ body {
   font-size: 0.95rem;
 }
 
-.page-date--secondary {
-  color: var(--text-muted);
-  font-size: 0.8rem;
+.greeting {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
 }
 
 .header-actions {
@@ -432,11 +433,27 @@ thead th {
   font-weight: 600;
 }
 
+.snapshot-section,
+.recap-section {
+  margin-bottom: 24px;
+}
+
+.section-heading {
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
 .tile-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 0;
+}
+
+.tile-row--single .tile {
+  max-width: 360px;
 }
 
 .tile {
@@ -490,8 +507,8 @@ thead th {
   color: var(--delta-good);
 }
 
-/* --- A second metric folded into a tile (sleep score inside Sleep,
-   HRV inside Recovery) rather than its own tile --- */
+/* --- A second metric folded into a tile (sleep time inside Sleep,
+   Miles inside Total Activity) rather than its own tile --- */
 
 .tile-submetric {
   display: flex;
@@ -511,6 +528,125 @@ thead th {
   font-size: 1.1rem;
   font-weight: 600;
   font-variant-numeric: proportional-nums;
+}
+
+.tile-detail {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+/* --- Progress rings (Sleep Score, Body Battery) — thresholds reuse this
+   project's four status tokens (good/warning/serious/critical), reserved
+   elsewhere for genuine state severity, which is exactly what a sleep/
+   battery quality tier is. Band labels use a dot + neutral text, the same
+   pattern .status-badge uses, never colored text directly: the warning
+   and serious hexes are validated as marks, not as text — too low
+   contrast on a light surface to read as text on their own. --- */
+
+.ring-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+.ring-wrap {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex: none;
+}
+
+.ring-svg {
+  display: block;
+}
+
+.ring-track {
+  fill: none;
+  stroke: var(--gridline);
+  stroke-width: 8;
+}
+
+.ring-progress {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.ring-progress.ring-good {
+  stroke: var(--status-good);
+}
+
+.ring-progress.ring-warning {
+  stroke: var(--status-warning);
+}
+
+.ring-progress.ring-serious {
+  stroke: var(--status-serious);
+}
+
+.ring-progress.ring-critical {
+  stroke: var(--status-critical);
+}
+
+.ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring-value {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: proportional-nums;
+}
+
+.ring-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ring-title {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.ring-band-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ring-band-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: none;
+}
+
+.ring-band-dot.ring-band-good {
+  background: var(--status-good);
+}
+
+.ring-band-dot.ring-band-warning {
+  background: var(--status-warning);
+}
+
+.ring-band-dot.ring-band-serious {
+  background: var(--status-serious);
+}
+
+.ring-band-dot.ring-band-critical {
+  background: var(--status-critical);
 }
 
 .status-badge {

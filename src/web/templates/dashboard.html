@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Daily Dashboard</title>
+  <title>Personal Health Portal</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -31,12 +31,43 @@
     </div>
   {% endmacro %}
 
+  {% macro ring(value, band, title) %}
+    {% set circumference = 213.63 %}
+    {% set pct = (value / 100) if value is not none else 0 %}
+    <div class="ring-row">
+      <div class="ring-wrap">
+        <svg class="ring-svg" viewBox="0 0 80 80" width="64" height="64" role="img"
+             aria-label="{{ title }}: {{ value if value is not none else 'no data' }} out of 100">
+          <g transform="rotate(-90 40 40)">
+            <circle class="ring-track" cx="40" cy="40" r="34" />
+            {% if value is not none %}
+              <circle class="ring-progress ring-{{ band.status }}" cx="40" cy="40" r="34"
+                      stroke-dasharray="{{ circumference }}"
+                      stroke-dashoffset="{{ (circumference * (1 - pct)) | round(1) }}" />
+            {% endif %}
+          </g>
+        </svg>
+        <div class="ring-center">
+          <span class="ring-value">{{ value if value is not none else "—" }}</span>
+        </div>
+      </div>
+      <div class="ring-caption">
+        <span class="ring-title">{{ title }}</span>
+        {% if band.label %}
+          <span class="ring-band-label">
+            <span class="ring-band-dot ring-band-{{ band.status }}" aria-hidden="true"></span>
+            {{ band.label }}
+          </span>
+        {% endif %}
+      </div>
+    </div>
+  {% endmacro %}
+
   <div class="page">
     <header class="page-header">
       <div>
-        <h1>Daily Dashboard</h1>
-        <p class="page-date">{{ metrics.date }}</p>
-        <p class="page-date page-date--secondary">Miles &amp; workout time from {{ metrics.activity_date }}</p>
+        <h1>Personal Health Portal</h1>
+        <p class="greeting">{{ greeting }}</p>
       </div>
       <div class="header-actions">
         <button id="journal-open" class="icon-button" type="button" aria-label="Morning journal">📝</button>
@@ -46,55 +77,65 @@
       </div>
     </header>
 
-    <section class="tile-row" aria-label="Yesterday's activity and today's recovery">
-      <div class="tile">
-        <span class="tile-label">Miles (yesterday)</span>
-        <span class="tile-value">{{ "%.1f"|format(metrics.miles) }}<span class="tile-unit">mi</span></span>
-        {{ totals_chips(metrics.miles_totals, "mi") }}
-      </div>
-
-      <div class="tile">
-        <span class="tile-label">Workout time (yesterday)</span>
-        <span class="tile-value">{{ "%.1f"|format(metrics.workout_hours) }}<span class="tile-unit">hrs</span></span>
-        {{ totals_chips(metrics.workout_hours_totals, "h") }}
-      </div>
-
-      <div class="tile">
-        <span class="tile-label">Sleep</span>
-        {% if metrics.sleep_hours is not none %}
-          <span class="tile-value">{{ "%.1f"|format(metrics.sleep_hours) }}<span class="tile-unit">hrs</span></span>
-        {% else %}
-          <span class="tile-value tile-value--empty">—</span>
-        {% endif %}
-        {{ trend_chips(metrics.sleep_hours_trend) }}
-        <div class="tile-submetric">
-          <span class="tile-sublabel">Sleep score</span>
-          <span class="tile-subvalue">{{ metrics.sleep_score if metrics.sleep_score is not none else "—" }}</span>
+    <section class="snapshot-section" aria-label="Sleep and recovery snapshot">
+      <h2 class="section-heading">Sleep &amp; Recovery Snapshot</h2>
+      <div class="tile-row">
+        <div class="tile">
+          <span class="tile-label">Sleep</span>
+          {{ ring(metrics.sleep_score, metrics.sleep_score_band, "Sleep Score") }}
+          <div class="tile-submetric">
+            <span class="tile-sublabel">Sleep time</span>
+            <span class="tile-subvalue">
+              {% if metrics.sleep_hours is not none %}{{ "%.1f"|format(metrics.sleep_hours) }}<span class="tile-unit">hrs</span>{% else %}—{% endif %}
+            </span>
+          </div>
+          <p class="tile-detail">
+            REM {{ "%.1f"|format(metrics.rem_sleep_hours) if metrics.rem_sleep_hours is not none else "—" }}h
+            &middot; Deep {{ "%.1f"|format(metrics.deep_sleep_hours) if metrics.deep_sleep_hours is not none else "—" }}h
+          </p>
+          {{ trend_chips(metrics.sleep_hours_trend) }}
         </div>
-        {{ trend_chips(metrics.sleep_score_trend) }}
-      </div>
 
-      <div class="tile">
-        <span class="tile-label">Recovery</span>
-        {% if metrics.recovery_score is not none %}
-          <span class="tile-value">{{ metrics.recovery_score }}</span>
-          <span class="status-badge status-{{ metrics.recovery_status }}">
-            <span class="status-icon" aria-hidden="true"></span>
-            {{ metrics.recovery_level or metrics.recovery_status|capitalize }}
-          </span>
-        {% else %}
-          <span class="tile-value tile-value--empty">—</span>
-          <span class="status-badge status-unknown">
-            <span class="status-icon" aria-hidden="true"></span>
-            No data
-          </span>
-        {% endif %}
-        {{ trend_chips(metrics.recovery_score_trend) }}
-        <div class="tile-submetric">
-          <span class="tile-sublabel">HRV</span>
-          <span class="tile-subvalue">{{ metrics.hrv if metrics.hrv is not none else "—" }}</span>
+        <div class="tile">
+          <span class="tile-label">Recovery</span>
+          {% if metrics.recovery_score is not none %}
+            <span class="tile-value">{{ metrics.recovery_score }}</span>
+            <span class="status-badge status-{{ metrics.recovery_status }}">
+              <span class="status-icon" aria-hidden="true"></span>
+              {{ metrics.recovery_level or metrics.recovery_status|capitalize }}
+            </span>
+          {% else %}
+            <span class="tile-value tile-value--empty">—</span>
+            <span class="status-badge status-unknown">
+              <span class="status-icon" aria-hidden="true"></span>
+              No data
+            </span>
+          {% endif %}
+          {{ trend_chips(metrics.recovery_score_trend) }}
+          {{ ring(metrics.body_battery, metrics.body_battery_band, "Body Battery") }}
         </div>
-        {{ trend_chips(metrics.hrv_trend) }}
+
+        <div class="tile">
+          <span class="tile-label">HRV</span>
+          <span class="tile-value">{{ metrics.hrv if metrics.hrv is not none else "—" }}</span>
+          {{ trend_chips(metrics.hrv_trend) }}
+        </div>
+      </div>
+    </section>
+
+    <section class="recap-section" aria-label="Yesterday's recap">
+      <h2 class="section-heading">Yesterday's Recap</h2>
+      <div class="tile-row tile-row--single">
+        <div class="tile">
+          <span class="tile-label">Total Activity</span>
+          <span class="tile-value">{{ "%.1f"|format(metrics.workout_hours) }}<span class="tile-unit">hrs</span></span>
+          {{ totals_chips(metrics.workout_hours_totals, "h") }}
+          <div class="tile-submetric">
+            <span class="tile-sublabel">Miles</span>
+            <span class="tile-subvalue">{{ "%.1f"|format(metrics.miles) }}<span class="tile-unit">mi</span></span>
+          </div>
+          {{ totals_chips(metrics.miles_totals, "mi") }}
+        </div>
       </div>
     </section>
 

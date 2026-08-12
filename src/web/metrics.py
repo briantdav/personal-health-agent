@@ -36,6 +36,29 @@ def _recovery_status(score: int | None) -> str | None:
     return "critical"
 
 
+# Sleep score and body battery are both already 0-100 Garmin scales, and
+# share this same band scheme for the dashboard's progress rings.
+_RING_BANDS = (
+    (90, "good", "Excellent"),
+    (75, "warning", "Good"),
+    (60, "serious", "Fair"),
+)
+
+
+def _ring_band(value: int | None) -> dict[str, Any]:
+    """status: one of this project's four status tokens, for ring color.
+    label: the user-facing tier name shown next to the ring (distinct from
+    "status" because "good" is both a status-token name *and* one of the
+    tier labels — Sleep score 75-89 is "Good" but colored status-warning,
+    not status-good, which is reserved for 90+ "Excellent")."""
+    if value is None:
+        return {"status": "unknown", "label": None}
+    for threshold, status, label in _RING_BANDS:
+        if value >= threshold:
+            return {"status": status, "label": label}
+    return {"status": "critical", "label": "Poor"}
+
+
 def _running_miles(activities: list[dict[str, Any]]) -> float:
     """Only Garmin's running family counts as mileage — golf, walks, rides
     etc. have a GPS distance too, but they aren't running miles."""
@@ -60,8 +83,24 @@ def _sleep_score(sleep_data: dict[str, Any]) -> int | None:
     return (scores.get("overall") or {}).get("value")
 
 
+def _rem_and_deep_sleep_hours(sleep_data: dict[str, Any]) -> tuple[float | None, float | None]:
+    dto = sleep_data.get("dailySleepDTO") or {}
+    rem_seconds = dto.get("remSleepSeconds")
+    deep_seconds = dto.get("deepSleepSeconds")
+    rem_hours = round(rem_seconds / 3600, 1) if rem_seconds is not None else None
+    deep_hours = round(deep_seconds / 3600, 1) if deep_seconds is not None else None
+    return rem_hours, deep_hours
+
+
 def _hrv_value(hrv_data: dict[str, Any] | None) -> int | None:
     return ((hrv_data or {}).get("hrvSummary") or {}).get("lastNightAvg")
+
+
+def _body_battery_value(summary_data: dict[str, Any]) -> int | None:
+    """Peak body battery for the day — same "peak" definition src/history/
+    sync.py stores, so the live dashboard ring and future trend history
+    mean the same thing."""
+    return (summary_data or {}).get("bodyBatteryHighestValue")
 
 
 def _recovery(day_iso: str) -> dict[str, Any]:
@@ -175,12 +214,19 @@ def get_dashboard_metrics(day: date | str | None = None) -> dict[str, Any]:
         sleep_data = {}
     sleep_hours = _sleep_hours(sleep_data)
     sleep_score = _sleep_score(sleep_data)
+    rem_sleep_hours, deep_sleep_hours = _rem_and_deep_sleep_hours(sleep_data)
 
     try:
         hrv_data = garmin.get_hrv(day_iso)
     except GARMIN_ERRORS:
         hrv_data = None
     hrv = _hrv_value(hrv_data)
+
+    try:
+        summary_data = garmin.get_daily_summary(day_iso)
+    except GARMIN_ERRORS:
+        summary_data = {}
+    body_battery = _body_battery_value(summary_data)
 
     recovery = _recovery(day_iso)
 
@@ -194,11 +240,16 @@ def get_dashboard_metrics(day: date | str | None = None) -> dict[str, Any]:
         "sleep_hours": sleep_hours,
         "sleep_hours_trend": _trend_info(sleep_hours, yesterday_iso, "sleep_hours", decimals=1),
         "sleep_score": sleep_score,
+        "sleep_score_band": _ring_band(sleep_score),
         "sleep_score_trend": _trend_info(sleep_score, yesterday_iso, "sleep_score", decimals=0),
+        "rem_sleep_hours": rem_sleep_hours,
+        "deep_sleep_hours": deep_sleep_hours,
         "recovery_score": recovery["score"],
         "recovery_level": recovery["level"],
         "recovery_status": recovery["status"],
         "recovery_score_trend": _trend_info(recovery["score"], yesterday_iso, "recovery_score", decimals=0),
+        "body_battery": body_battery,
+        "body_battery_band": _ring_band(body_battery),
         "hrv": hrv,
         "hrv_trend": _trend_info(hrv, yesterday_iso, "hrv_overnight_avg", decimals=0),
         "training_plan": get_todays_training_plan(day_iso),

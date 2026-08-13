@@ -172,3 +172,38 @@ def test_journal_submit_unchecked_boxes_save_as_false():
     values = journal.get_values("2026-08-12")
     assert values["took_creatine"] == 0
     assert values["drank_alcohol"] == 0
+
+
+def test_manifest_is_served_and_valid():
+    response = client.get("/static/manifest.json")
+
+    assert response.status_code == 200
+    manifest = response.json()
+    assert manifest["display"] == "standalone"
+    assert manifest["start_url"] == "/"
+    assert {icon["sizes"] for icon in manifest["icons"]} == {"192x192", "512x512"}
+
+
+def test_service_worker_is_served():
+    response = client.get("/static/sw.js")
+
+    assert response.status_code == 200
+    assert "install" in response.text
+
+
+@patch("src.web.app.get_dashboard_metrics", return_value=FAKE_METRICS)
+def test_dashboard_includes_pwa_head_tags(mock_metrics):
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'rel="manifest"' in response.text
+    assert "apple-mobile-web-app-capable" in response.text
+    assert "viewport-fit=cover" in response.text
+
+
+@patch("src.web.app.get_trends", return_value=FAKE_TRENDS)
+def test_trends_page_includes_pwa_head_tags(mock_trends):
+    response = client.get("/trends")
+
+    assert response.status_code == 200
+    assert 'rel="manifest"' in response.text

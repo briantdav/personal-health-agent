@@ -1,12 +1,8 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Trends</title>
-  <link rel="stylesheet" href="/static/style.css" />
-</head>
-<body>
+{% extends "base.html" %}
+
+{% block title %}Trends{% endblock %}
+
+{% block body %}
   <div class="page">
     <header class="page-header">
       <div>
@@ -87,21 +83,9 @@
       </section>
     {% endif %}
   </div>
+{% endblock %}
 
+{% block scripts %}
   <script id="trends-data" type="application/json">{{ trends_json | safe }}</script>
   <script src="/static/trends.js"></script>
-  <script>
-    const root = document.documentElement;
-    const stored = localStorage.getItem("theme");
-    if (stored) root.setAttribute("data-theme", stored);
-
-    document.getElementById("theme-toggle").addEventListener("click", () => {
-      const current = root.getAttribute("data-theme")
-        || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-      const next = current === "dark" ? "light" : "dark";
-      root.setAttribute("data-theme", next);
-      localStorage.setItem("theme", next);
-    });
-  </script>
-</body>
-</html>
+{% endblock %}

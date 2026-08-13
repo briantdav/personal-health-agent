@@ -1,12 +1,8 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Personal Health Portal</title>
-  <link rel="stylesheet" href="/static/style.css" />
-</head>
-<body>
+{% extends "base.html" %}
+
+{% block title %}Personal Health Portal{% endblock %}
+
+{% block body %}
   {% macro trend_symbol(trend) -%}
     {%- if trend == "up" -%}▲{%- elif trend == "down" -%}▼{%- else -%}–{%- endif -%}
   {%- endmacro %}
@@ -158,17 +154,17 @@
         <input type="hidden" name="entry_date" value="{{ metrics.date }}" />
         <div class="habit-list">
           {% for q in journal_questions %}
-            <div class="habit-row" data-key="{{ q.key }}"{% if q.show_if %} data-show-if="{{ q.show_if }}"{% endif %}>
-              <label for="field-{{ q.key }}">{{ q.label }}</label>
+            <label class="habit-row" data-key="{{ q.key }}"{% if q.show_if %} data-show-if="{{ q.show_if }}"{% endif %}>
+              <span>{{ q.label }}</span>
               {% if q.kind == "bool" %}
-                <input type="checkbox" id="field-{{ q.key }}" name="{{ q.key }}" {{ "checked" if journal_values[q.key] }} />
+                <input type="checkbox" name="{{ q.key }}" {{ "checked" if journal_values[q.key] }} />
               {% elif q.kind == "number" %}
-                <input type="number" id="field-{{ q.key }}" name="{{ q.key }}" step="0.5" min="0" inputmode="decimal"
+                <input type="number" name="{{ q.key }}" step="0.5" min="0" inputmode="decimal"
                        value="{{ journal_values[q.key] if journal_values[q.key] is not none else '' }}" />
               {% elif q.kind == "time" %}
-                <input type="time" id="field-{{ q.key }}" name="{{ q.key }}" value="{{ journal_values[q.key] or '' }}" />
+                <input type="time" name="{{ q.key }}" value="{{ journal_values[q.key] or '' }}" />
               {% endif %}
-            </div>
+            </label>
           {% endfor %}
         </div>
         <div class="modal-actions">
@@ -179,7 +175,9 @@
       </form>
     </div>
   </div>
+{% endblock %}
 
+{% block scripts %}
   <script>
     (function () {
       const modal = document.getElementById("journal-modal");
@@ -230,22 +228,7 @@
         openModal();
       }
     })();
-  </script>
-
-  <script>
-    const root = document.documentElement;
-    const stored = localStorage.getItem("theme");
-    if (stored) root.setAttribute("data-theme", stored);
-
-    document.getElementById("theme-toggle").addEventListener("click", () => {
-      const current = root.getAttribute("data-theme")
-        || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-      const next = current === "dark" ? "light" : "dark";
-      root.setAttribute("data-theme", next);
-      localStorage.setItem("theme", next);
-    });
 
     document.getElementById("refresh").addEventListener("click", () => location.reload());
   </script>
-</body>
-</html>
+{% endblock %}

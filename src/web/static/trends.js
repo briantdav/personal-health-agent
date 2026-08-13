@@ -109,9 +109,9 @@
     });
     svg.appendChild(hitArea);
 
-    hitArea.addEventListener("mousemove", (evt) => {
+    const showTooltipAt = (clientX) => {
       const rect = svg.getBoundingClientRect();
-      const mx = ((evt.clientX - rect.left) / rect.width) * w;
+      const mx = ((clientX - rect.left) / rect.width) * w;
       const idx = Math.round(((mx - pad.left) / plotW) * (points.length - 1));
       const p = points[Math.max(0, Math.min(points.length - 1, idx))];
       if (!p) return;
@@ -122,11 +122,29 @@
       tooltip.style.display = "block";
       tooltip.style.left = `${(px / w) * 100}%`;
       tooltip.textContent = `${p.x}: ${formatValue(p.y)}`;
-    });
-    hitArea.addEventListener("mouseleave", () => {
+    };
+    const hideTooltip = () => {
       crosshair.style.display = "none";
       tooltip.style.display = "none";
-    });
+    };
+
+    // Mouse (desktop) — hover to scrub, leave to hide.
+    hitArea.addEventListener("mousemove", (evt) => showTooltipAt(evt.clientX));
+    hitArea.addEventListener("mouseleave", hideTooltip);
+
+    // Touch (phone/tablet) — drag a finger across the chart to scrub,
+    // same as hover. preventDefault while touching the chart so dragging
+    // scrubs the tooltip instead of scrolling the page; { passive: false }
+    // is required for that preventDefault to actually take effect.
+    hitArea.addEventListener("touchstart", (evt) => {
+      showTooltipAt(evt.touches[0].clientX);
+      evt.preventDefault();
+    }, { passive: false });
+    hitArea.addEventListener("touchmove", (evt) => {
+      showTooltipAt(evt.touches[0].clientX);
+      evt.preventDefault();
+    }, { passive: false });
+    hitArea.addEventListener("touchend", hideTooltip);
   }
 
   function renderAll() {

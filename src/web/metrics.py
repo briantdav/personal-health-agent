@@ -193,13 +193,27 @@ def get_todays_training_plan(day: date | str | None = None) -> dict[str, Any]:
     """Today's run, pulled from the Garmin calendar — "Rest Day" if
     nothing's scheduled there. Run workouts only, for now: strength and
     everything else will come from a different source once that's built,
-    and until then this card only speaks to running.
-    """
+    and until then this card only speaks to running. "sport" is the tag
+    shown on the training card — "Run" when something's scheduled, None
+    on a rest day (so the card doesn't tag a rest day "Run")."""
     day_iso = garmin.to_iso_date(day)
     run = _scheduled_run(day_iso)
     if run is None:
-        return {"summary": "Rest Day", "details": None}
-    return {"summary": run.get("title") or "Scheduled run", "details": None}
+        return {"summary": "Rest Day", "details": None, "sport": None}
+    return {"summary": run.get("title") or "Scheduled run", "details": None, "sport": "Run"}
+
+
+# Recovery-status -> the one-line call shown on the dashboard's verdict
+# block. None (falls back to "Train as planned" in the template) for
+# "good"/unknown, since neither of those calls for backing off.
+_VERDICT_CALLS = {
+    "serious": "Ease up today",
+    "critical": "Back off today",
+}
+
+
+def _verdict_call(status: str | None) -> str | None:
+    return _VERDICT_CALLS.get(status)
 
 
 def get_dashboard_metrics(day: date | str | None = None) -> dict[str, Any]:
@@ -252,6 +266,12 @@ def get_dashboard_metrics(day: date | str | None = None) -> dict[str, Any]:
     return {
         "date": day_iso,
         "activity_date": yesterday_iso,
+        # The journal is filled out each morning for that same calendar day
+        # (today) — matches journal.get_values()/already_submitted()'s own
+        # default of date.today(), not yesterday.
+        "journal_date": day_iso,
+        "verdict_call": _verdict_call(recovery["status"]),
+        "coach_note": None,  # filled by src/agent.py once the LLM read exists
         "miles": miles,
         "miles_totals": _totals_info(yesterday_iso, "miles"),
         "workout_hours": workout_hours,
@@ -269,6 +289,7 @@ def get_dashboard_metrics(day: date | str | None = None) -> dict[str, Any]:
         "recovery_score_trend": _trend_info(recovery["score"], yesterday_iso, "recovery_score", decimals=0),
         "body_battery": body_battery,
         "body_battery_band": _ring_band(body_battery),
+        "body_battery_avg_7d": _window_average(yesterday_iso, 7, "body_battery_peak", decimals=0),
         "hrv": hrv,
         "hrv_trend": _trend_info(hrv, yesterday_iso, "hrv_overnight_avg", decimals=0),
         "training_plan": get_todays_training_plan(day_iso),

@@ -1,0 +1,221 @@
+/* ── Modernist theme ────────────────────────────────────────────────────
+   Flat, zero-radius, Archivo, single red accent. Linked after style.css in
+   base.html: it redefines the existing token values, so every rule in
+   style.css inherits the new look without being touched. Status token
+   *names* are unchanged, so metrics.py keeps working. */
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap');
+
+:root {
+  color-scheme: light;
+  --surface-1: #eae9e9;
+  --page-plane: #f3f2f2;
+  --text-primary: #201e1d;
+  --text-secondary: #605d5d;
+  --text-muted: #7d7979;
+  --border: rgba(32, 30, 29, 0.2);
+  --divider: rgba(32, 30, 29, 0.4);
+  --accent: #ec3013;
+  --accent-tint: #ffe0d9;
+  --accent-deep: #ae1800;
+  --gridline: #d7d3d3;
+  --delta-good: #006300;
+  --delta-flat: #605d5d;
+  /* Not "delta-bad" — deliberately no such token. A day below its 7-day
+     average isn't a health alarm, just a comparison (see dev_bar below),
+     so the deviation bar renders in muted ink, not red. --habit-flag is
+     the one place red genuinely belongs: "you're cutting this habit" on
+     the weekly review's grid is a real, intentional signal. */
+  --habit-flag: #ae1800;
+
+  /* Distinct steps within the accent's red family, lightest (mildest) to
+     darkest (worst) — keeps the four tiers visually distinguishable
+     without breaking the near-monochrome palette. Upstream had warning
+     and serious as the identical hex, which collapsed "Good" and "Fair"
+     into one color on the Sleep Score / Body Battery rings. */
+  --status-good: #006300;
+  --status-warning: #ec3013;
+  --status-serious: #ae1800;
+  --status-critical: #7c1405;
+  --status-unknown: #605d5d;
+
+  --radius: 0px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-1: #2d2b2b;
+  --page-plane: #201e1d;
+  --text-primary: #f8f4f4;
+  --text-secondary: #bab6b6;
+  --text-muted: #928d8d;
+  --border: rgba(248, 244, 244, 0.22);
+  --divider: rgba(248, 244, 244, 0.4);
+  --accent-tint: #442018;
+  --delta-good: #4caf50;
+  --delta-flat: #bab6b6;
+  --habit-flag: #ff6b4a;
+  --status-good: #4caf50;
+  --status-warning: #ff6b4a;
+  --status-serious: #ff8f6b;
+  --status-critical: #ffb199;
+  --status-unknown: #928d8d;
+}
+
+/* Same tokens, applied automatically for OS-level dark mode (not just the
+   manual in-app toggle above) — mirrors the working pattern in style.css:
+   a real @media block wrapping a real selector, not a selector comma-
+   joined onto an at-rule (which is invalid CSS and silently does nothing). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface-1: #2d2b2b;
+    --page-plane: #201e1d;
+    --text-primary: #f8f4f4;
+    --text-secondary: #bab6b6;
+    --text-muted: #928d8d;
+    --border: rgba(248, 244, 244, 0.22);
+    --divider: rgba(248, 244, 244, 0.4);
+    --accent-tint: #442018;
+    --delta-good: #4caf50;
+    --delta-flat: #bab6b6;
+    --habit-flag: #ff6b4a;
+    --status-good: #4caf50;
+    --status-warning: #ff6b4a;
+    --status-serious: #ff8f6b;
+    --status-critical: #ffb199;
+    --status-unknown: #928d8d;
+  }
+}
+
+body {
+  font-family: Archivo, system-ui, sans-serif;
+  font-size: 15px;
+}
+
+h1, h2, h3, .num { font-weight: 800; letter-spacing: -0.015em; }
+
+/* Zero radius everywhere — overrides the rounded rules further down. */
+.tile, .modal, .chart-card, .plan-card, .empty-state, .icon-button,
+.primary-button, .segmented, .table-scroll, .habit-row input {
+  border-radius: 0 !important;
+}
+
+.page { padding: 0 0 96px; max-width: 480px; }
+
+/* ── Small layout utilities — repeated inline styles in the upstream
+   templates, pulled out to match this codebase's all-CSS-classes
+   convention rather than sprinkling style="" everywhere. ── */
+.mn-row-between { display: flex; align-items: baseline; justify-content: space-between; }
+.mn-row-end { display: flex; align-items: flex-end; justify-content: space-between; }
+
+/* ── Section rhythm ─────────────────────────────────────────────────── */
+.mn-section { padding: 16px 20px; border-bottom: 2px solid var(--divider); }
+.mn-kicker {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.14em;
+  color: var(--text-secondary); text-transform: uppercase;
+}
+.mn-display { font-size: 30px; font-weight: 800; letter-spacing: -0.025em; line-height: 1.08; }
+
+/* ── Verdict block ──────────────────────────────────────────────────── */
+.mn-verdict { background: var(--accent-tint); padding: 20px 20px 18px; border-bottom: 2px solid var(--divider); }
+.mn-verdict .mn-kicker { color: var(--accent-deep); }
+.mn-verdict-row { display: flex; align-items: flex-end; gap: 14px; margin-top: 6px; }
+.mn-verdict-score { font-size: 64px; font-weight: 800; line-height: 0.86; letter-spacing: -0.03em; }
+.mn-verdict-call { font-size: 22px; font-weight: 800; line-height: 1.1; padding-bottom: 6px; }
+.mn-verdict p { margin: 14px 0 0; font-size: 13.5px; line-height: 1.5; max-width: 32ch; }
+.mn-verdict-actions { display: flex; gap: 8px; margin-top: 14px; }
+
+/* ── Metric strip with deviation bars ───────────────────────────────── */
+.mn-strip { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 2px solid var(--divider); }
+.mn-cell { padding: 14px 12px 16px; border-right: 1px solid var(--border); }
+.mn-cell:last-child { border-right: 0; }
+.mn-cell:first-child { padding-left: 20px; }
+.mn-cell:last-child { padding-right: 20px; }
+.mn-value { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+.mn-value small { font-size: 12px; font-weight: 400; }
+
+/* Today's value measured from the 7-day average: the tick is the average,
+   the bar runs right (above) or left (below); a dot means "on it". Below-
+   average renders in the same muted ink as "flat" — see --habit-flag
+   above for why this isn't red. */
+.mn-dev { position: relative; height: 12px; margin-top: 8px; }
+.mn-dev-track { position: absolute; top: 5px; left: 0; right: 0; height: 2px; background: var(--gridline); }
+.mn-dev-tick { position: absolute; top: 0; left: 44%; width: 2px; height: 12px; background: var(--text-primary); }
+.mn-dev-bar { position: absolute; top: 2px; height: 8px; }
+.mn-dev-bar.up { background: var(--delta-good); }
+.mn-dev-bar.down { background: var(--delta-flat); }
+.mn-dev-dot {
+  position: absolute; top: 2px; left: calc(44% - 3px);
+  width: 8px; height: 8px; border-radius: 999px; background: var(--delta-flat);
+}
+.mn-baseline { font-size: 11px; color: var(--text-secondary); margin-top: 6px; }
+
+/* ── Rows / lists ───────────────────────────────────────────────────── */
+.mn-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+}
+.mn-row:last-child { border-bottom: 0; }
+.mn-row b { font-weight: 800; }
+
+/* ── Habit grid (weekly review) ─────────────────────────────────────── */
+.mn-grid-row { display: flex; align-items: center; gap: 10px; }
+.mn-grid-label { flex: 1; font-size: 12.5px; }
+.mn-grid-cells { display: flex; gap: 3px; }
+.mn-cellbox { width: 20px; height: 20px; background: rgba(32, 30, 29, 0.14); }
+.mn-cellbox.done { background: var(--text-primary); }
+.mn-cellbox.flag { background: var(--habit-flag); }
+.mn-grid-head { width: 20px; text-align: center; font-size: 9.5px; font-weight: 800; color: var(--text-secondary); }
+
+/* ── Buttons (flush-left labels) ────────────────────────────────────── */
+.mn-btn {
+  display: inline-flex; align-items: center; justify-content: flex-start;
+  font-family: inherit; font-weight: 800; font-size: 13px; letter-spacing: 0.04em;
+  min-height: 44px; padding: 0 16px; border: 0; cursor: pointer;
+}
+.mn-btn-primary { background: var(--accent); color: #f3f2f2; }
+.mn-btn-primary:hover { background: #dd2b0f; }
+.mn-btn-primary:active { background: var(--accent-deep); }
+.mn-btn-secondary { background: transparent; color: var(--text-primary); border: 1px solid var(--divider); }
+.mn-btn-ghost { background: transparent; color: var(--text-secondary); padding: 0 6px; }
+.mn-btn-block { width: 100%; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Bottom tab bar (base.html) ─────────────────────────────────────── */
+.mn-tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  background: var(--page-plane); border-top: 2px solid var(--divider);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.mn-tab {
+  border: 0; background: transparent; font-family: inherit; font-weight: 800;
+  font-size: 9.5px; letter-spacing: 0.08em; padding: 12px 0 10px; min-height: 44px;
+  color: var(--text-secondary); text-decoration: none; text-align: center;
+  border-top: 3px solid transparent; margin-top: -2px; cursor: pointer;
+}
+.mn-tab.active { color: var(--accent); border-top-color: var(--accent); }
+
+/* ── Sheets (journal + Monday review) ───────────────────────────────── */
+.mn-sheet-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: flex-end; background: rgba(32, 30, 29, 0.55);
+}
+.mn-sheet-overlay[hidden] { display: none; }
+.mn-sheet {
+  width: 100%; max-height: 94vh; background: var(--page-plane);
+  display: flex; flex-direction: column; box-shadow: 0 -12px 32px rgba(45, 43, 43, 0.22);
+}
+.mn-sheet-head { padding: 20px 20px 14px; border-bottom: 2px solid var(--divider); }
+.mn-sheet-body { flex: 1; overflow-y: auto; }
+.mn-sheet-foot {
+  display: flex; gap: 10px; padding: 14px 20px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  border-top: 2px solid var(--divider);
+}
+.mn-progress { height: 6px; background: rgba(32, 30, 29, 0.14); flex: 1; }
+.mn-progress span { display: block; height: 6px; background: var(--accent); }
+
+.mn-step { display: block; }
+.mn-step-label { font-size: 30px; display: block; padding: 24px 20px 16px; }
+.mn-step-input { display: block; padding: 0 20px 24px; }

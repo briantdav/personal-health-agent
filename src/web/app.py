@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from src.web import journal
+from src.web import journal, weekly
 from src.web.metrics import get_dashboard_metrics
 from src.web.trends import get_trends
 
@@ -44,10 +44,21 @@ def dashboard(request: Request):
         {
             "metrics": metrics,
             "greeting": greeting(),
+            "active_tab": "today",
             "journal_questions": journal.QUESTIONS,
             "journal_values": journal.get_values(),
             "journal_already_submitted": journal.already_submitted(),
+            "weekly_review": weekly.get_weekly_review() if weekly.is_review_day() else None,
         },
+    )
+
+
+@app.get("/review")
+def review_page(request: Request):
+    return templates.TemplateResponse(
+        request,
+        "weekly_review.html",
+        {"review": weekly.get_weekly_review(), "active_tab": "review"},
     )
 
 
@@ -70,7 +81,7 @@ def trends_page(request: Request, days: int = 365):
     return templates.TemplateResponse(
         request,
         "trends.html",
-        {"trends": data, "days": days, "trends_json": json.dumps(data)},
+        {"trends": data, "days": days, "trends_json": json.dumps(data), "active_tab": "trends"},
     )
 
 

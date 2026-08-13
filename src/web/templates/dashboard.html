@@ -3,174 +3,184 @@
 {% block title %}Personal Health Portal{% endblock %}
 
 {% block body %}
-  {% macro trend_symbol(trend) -%}
-    {%- if trend == "up" -%}▲{%- elif trend == "down" -%}▼{%- else -%}–{%- endif -%}
+  {# Deviation bar: today's value measured against its 7-day average.
+     Bar right + green = above avg, left + muted = below avg, grey dot =
+     level. Below-average is deliberately NOT red — a single day dipping
+     under a rolling average isn't a health alarm, just a comparison (see
+     --habit-flag in modernist.css for where red actually belongs).
+     higher_is_better flips which direction counts as "good" for a metric
+     where less is the win (none of today's three cells need that yet, but
+     the flag is real, not decorative). Half-width (44%) is the average
+     tick; span is capped so a wild day can't run off the cell. #}
+  {% macro dev_bar(value, avg, higher_is_better=True) %}
+    {% set span = 0 if (value is none or avg is none or not avg) else
+                  ((value - avg) / avg * 120) | round(1) %}
+    {% set span = 44 if span > 44 else (-44 if span < -44 else span) %}
+    {% set favorable = span if higher_is_better else -span %}
+    <div class="mn-dev">
+      <div class="mn-dev-track"></div>
+      {% if value is none or avg is none %}
+      {% elif span > 0.5 %}
+        <div class="mn-dev-bar {{ 'up' if favorable > 0 else 'down' }}" style="left: 44%; width: {{ span }}%"></div>
+      {% elif span < -0.5 %}
+        <div class="mn-dev-bar {{ 'up' if favorable > 0 else 'down' }}" style="left: {{ 44 + span }}%; width: {{ -span }}%"></div>
+      {% else %}
+        <div class="mn-dev-dot"></div>
+      {% endif %}
+      <div class="mn-dev-tick"></div>
+    </div>
+  {% endmacro %}
+
+  {% macro hours_mins(hours) -%}
+    {%- if hours is none -%}—{%- else -%}
+      {{ hours | int }}<small>h</small> {{ ((hours - (hours | int)) * 60) | round | int }}<small>m</small>
+    {%- endif -%}
   {%- endmacro %}
 
-  {% macro trend_chips(trend) %}
-    {% if trend and (trend.avg_7d is not none or trend.avg_30d is not none) %}
-      <div class="trend-row">
-        {% if trend.avg_7d is not none %}
-          <span class="trend-chip trend-{{ trend.trend_7d or 'flat' }}">{{ trend_symbol(trend.trend_7d) }} 7d {{ trend.avg_7d }}</span>
-        {% endif %}
-        {% if trend.avg_30d is not none %}
-          <span class="trend-chip trend-{{ trend.trend_30d or 'flat' }}">{{ trend_symbol(trend.trend_30d) }} 30d {{ trend.avg_30d }}</span>
-        {% endif %}
-      </div>
-    {% endif %}
-  {% endmacro %}
-
-  {% macro totals_chips(totals, unit) %}
-    <div class="trend-row">
-      <span class="trend-chip">7d {{ totals.total_7d }}{{ unit }}</span>
-      <span class="trend-chip">30d {{ totals.total_30d }}{{ unit }}</span>
-    </div>
-  {% endmacro %}
-
-  {% macro ring(value, band, title) %}
-    {% set circumference = 213.63 %}
-    {% set pct = (value / 100) if value is not none else 0 %}
-    <div class="ring-row">
-      <div class="ring-wrap">
-        <svg class="ring-svg" viewBox="0 0 80 80" width="64" height="64" role="img"
-             aria-label="{{ title }}: {{ value if value is not none else 'no data' }} out of 100">
-          <g transform="rotate(-90 40 40)">
-            <circle class="ring-track" cx="40" cy="40" r="34" />
-            {% if value is not none %}
-              <circle class="ring-progress ring-{{ band.status }}" cx="40" cy="40" r="34"
-                      stroke-dasharray="{{ circumference }}"
-                      stroke-dashoffset="{{ (circumference * (1 - pct)) | round(1) }}" />
-            {% endif %}
-          </g>
-        </svg>
-        <div class="ring-center">
-          <span class="ring-value">{{ value if value is not none else "—" }}</span>
-        </div>
-      </div>
-      <div class="ring-caption">
-        <span class="ring-title">{{ title }}</span>
-        {% if band.label %}
-          <span class="ring-band-label">
-            <span class="ring-band-dot ring-band-{{ band.status }}" aria-hidden="true"></span>
-            {{ band.label }}
-          </span>
-        {% endif %}
-      </div>
-    </div>
-  {% endmacro %}
-
   <div class="page">
-    <header class="page-header">
-      <div>
-        <h1>Personal Health Portal</h1>
-        <p class="greeting">{{ greeting }}</p>
-      </div>
+    <header class="mn-section mn-row-end">
+      <h1 style="margin: 0; font-size: 22px;">{{ greeting }}</h1>
       <div class="header-actions">
-        <button id="journal-open" class="icon-button" type="button" aria-label="Morning journal">📝</button>
-        <a class="icon-button icon-button--link" href="/trends" aria-label="Trends">📈</a>
+        <button id="journal-open" class="icon-button" type="button" aria-label="Habit journal">JRNL</button>
         <button id="theme-toggle" class="icon-button" type="button" aria-label="Toggle theme">◐</button>
-        <button id="refresh" class="icon-button" type="button" aria-label="Refresh">↻</button>
       </div>
     </header>
 
-    <section class="snapshot-section" aria-label="Sleep and recovery snapshot">
-      <h2 class="section-heading">Sleep &amp; Recovery Snapshot</h2>
-      <div class="tile-row">
-        <div class="tile">
-          <span class="tile-label">Sleep</span>
-          {{ ring(metrics.sleep_score, metrics.sleep_score_band, "Sleep Score") }}
-          <div class="tile-submetric">
-            <span class="tile-sublabel">Sleep time</span>
-            <span class="tile-subvalue">
-              {% if metrics.sleep_hours is not none %}{{ "%.1f"|format(metrics.sleep_hours) }}<span class="tile-unit">hrs</span>{% else %}—{% endif %}
-            </span>
-          </div>
-          <p class="tile-detail">
-            REM {{ "%.1f"|format(metrics.rem_sleep_hours) if metrics.rem_sleep_hours is not none else "—" }}h
-            &middot; Deep {{ "%.1f"|format(metrics.deep_sleep_hours) if metrics.deep_sleep_hours is not none else "—" }}h
-          </p>
-          {{ trend_chips(metrics.sleep_hours_trend) }}
-        </div>
-
-        <div class="tile">
-          <span class="tile-label">Recovery</span>
-          {% if metrics.recovery_score is not none %}
-            <span class="tile-value">{{ metrics.recovery_score }}</span>
-            <span class="status-badge status-{{ metrics.recovery_status }}">
-              <span class="status-icon" aria-hidden="true"></span>
-              {{ metrics.recovery_level or metrics.recovery_status|capitalize }}
-            </span>
-          {% else %}
-            <span class="tile-value tile-value--empty">—</span>
-            <span class="status-badge status-unknown">
-              <span class="status-icon" aria-hidden="true"></span>
-              No data
-            </span>
-          {% endif %}
-          {{ trend_chips(metrics.recovery_score_trend) }}
-          {{ ring(metrics.body_battery, metrics.body_battery_band, "Body Battery") }}
-        </div>
-
-        <div class="tile">
-          <span class="tile-label">HRV</span>
-          <span class="tile-value">{{ metrics.hrv if metrics.hrv is not none else "—" }}</span>
-          {{ trend_chips(metrics.hrv_trend) }}
-        </div>
+    <section class="mn-verdict" aria-label="Recovery verdict">
+      <div class="mn-kicker">Recovery verdict</div>
+      <div class="mn-verdict-row">
+        <div class="mn-verdict-score">{{ metrics.recovery_score if metrics.recovery_score is not none else "—" }}</div>
+        <div class="mn-verdict-call">{{ metrics.verdict_call or "Train as planned" }}</div>
+      </div>
+      {% if metrics.coach_note %}<p>{{ metrics.coach_note }}</p>{% endif %}
+      <div class="mn-verdict-actions">
+        <a class="mn-btn mn-btn-primary" href="/review">WEEKLY REVIEW</a>
+        <a class="mn-btn mn-btn-secondary" href="/trends">THE DATA</a>
       </div>
     </section>
 
-    <section class="recap-section" aria-label="Yesterday's recap">
-      <h2 class="section-heading">Yesterday's Recap</h2>
-      <div class="tile-row tile-row--single">
-        <div class="tile">
-          <span class="tile-label">Total Activity</span>
-          <span class="tile-value">{{ "%.1f"|format(metrics.workout_hours) }}<span class="tile-unit">hrs</span></span>
-          {{ totals_chips(metrics.workout_hours_totals, "h") }}
-          <div class="tile-submetric">
-            <span class="tile-sublabel">Miles</span>
-            <span class="tile-subvalue">{{ "%.1f"|format(metrics.miles) }}<span class="tile-unit">mi</span></span>
-          </div>
-          {{ totals_chips(metrics.miles_totals, "mi") }}
-        </div>
+    <section class="mn-strip" id="recovery" aria-label="Sleep, HRV and body battery">
+      <div class="mn-cell">
+        <div class="mn-kicker">Sleep</div>
+        <div class="mn-value">{{ hours_mins(metrics.sleep_hours) }}</div>
+        {{ dev_bar(metrics.sleep_hours, metrics.sleep_hours_trend.avg_7d) }}
+      </div>
+      <div class="mn-cell">
+        <div class="mn-kicker">HRV</div>
+        <div class="mn-value">{{ metrics.hrv if metrics.hrv is not none else "—" }}</div>
+        {{ dev_bar(metrics.hrv, metrics.hrv_trend.avg_7d) }}
+      </div>
+      <div class="mn-cell">
+        <div class="mn-kicker">Battery</div>
+        <div class="mn-value">{{ metrics.body_battery if metrics.body_battery is not none else "—" }}</div>
+        {{ dev_bar(metrics.body_battery, metrics.body_battery_avg_7d) }}
       </div>
     </section>
 
-    <section class="plan-card" aria-label="Today's training plan">
-      <h2>Today's training plan</h2>
-      <p class="plan-summary">{{ metrics.training_plan.summary }}</p>
+    <section class="mn-section" id="training" aria-label="Today's training">
+      <div class="mn-row-between">
+        <div class="mn-kicker">Today's training</div>
+        {% if metrics.training_plan.sport %}
+          <div class="mn-kicker" style="color: var(--accent-deep);">{{ metrics.training_plan.sport }}</div>
+        {% endif %}
+      </div>
+      <div style="font-size: 21px; font-weight: 800; margin-top: 6px;">{{ metrics.training_plan.summary }}</div>
       {% if metrics.training_plan.details %}
-        <p class="plan-details">{{ metrics.training_plan.details }}</p>
+        <div style="font-size: 12.5px; color: var(--text-secondary); margin-top: 3px;">{{ metrics.training_plan.details }}</div>
       {% endif %}
     </section>
+
+    <section class="mn-section" aria-label="Yesterday's recap">
+      <div class="mn-kicker">Yesterday · {{ metrics.activity_date }}</div>
+      <div class="mn-row"><span>Miles</span><b>{{ "%.1f"|format(metrics.miles) }}</b></div>
+      <div class="mn-row"><span>Training time</span><b>{{ "%.1f"|format(metrics.workout_hours) }}h</b></div>
+      <div class="mn-row"><span>7d / 30d miles</span><b>{{ metrics.miles_totals.total_7d }} · {{ metrics.miles_totals.total_30d }}</b></div>
+    </section>
+
+    <button type="button" id="journal-row" class="mn-section" style="width: 100%; text-align: left; background: none; border-left: 0; border-right: 0; border-top: 0; cursor: pointer;">
+      <div class="mn-kicker">Habit journal · {{ metrics.journal_date }}</div>
+      <div style="font-size: 16px; font-weight: 800; margin-top: 4px;">
+        {% if journal_already_submitted %}Logged{% else %}Not logged yet — tap to finish{% endif %}
+      </div>
+    </button>
   </div>
 
-  <div id="journal-modal" class="modal-overlay" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="journal-title">
-      <div class="modal-header">
-        <h2 id="journal-title">Morning check-in</h2>
-        <button id="journal-close" class="icon-button" type="button" aria-label="Close">✕</button>
-      </div>
-      <form id="journal-form">
-        <input type="hidden" name="entry_date" value="{{ metrics.date }}" />
-        <div class="habit-list">
-          {% for q in journal_questions %}
-            <label class="habit-row" data-key="{{ q.key }}"{% if q.show_if %} data-show-if="{{ q.show_if }}"{% endif %}>
-              <span>{{ q.label }}</span>
-              {% if q.kind == "bool" %}
-                <input type="checkbox" name="{{ q.key }}" {{ "checked" if journal_values[q.key] }} />
-              {% elif q.kind == "number" %}
-                <input type="number" name="{{ q.key }}" step="0.5" min="0" inputmode="decimal"
-                       value="{{ journal_values[q.key] if journal_values[q.key] is not none else '' }}" />
-              {% elif q.kind == "time" %}
-                <input type="time" name="{{ q.key }}" value="{{ journal_values[q.key] or '' }}" />
-              {% endif %}
-            </label>
-          {% endfor %}
+  {# Weekly review sheet — Monday only, shown BEFORE the journal. #}
+  {% if weekly_review %}
+    <div id="weekly-sheet" class="mn-sheet-overlay" data-week="{{ weekly_review.week_label }}" hidden>
+      <div class="mn-sheet" role="dialog" aria-modal="true" aria-labelledby="weekly-sheet-title">
+        <div class="mn-sheet-head">
+          <div class="mn-kicker" style="color: var(--accent-deep);">Week of {{ weekly_review.week_label }} · closed</div>
+          <h2 id="weekly-sheet-title" class="mn-display" style="margin: 3px 0 0;">{{ weekly_review.headline }}</h2>
         </div>
-        <div class="modal-actions">
-          <button type="button" id="journal-dismiss" class="link-button">Not now</button>
-          <span id="journal-saved-note" class="page-date" hidden>Saved</span>
-          <button type="submit" class="primary-button">Save</button>
+        <div class="mn-sheet-body">
+          <div class="mn-strip">
+            <div class="mn-cell">
+              <div class="mn-kicker">Miles</div>
+              <div class="mn-value">{{ weekly_review.miles }}</div>
+              {{ dev_bar(weekly_review.miles, weekly_review.miles_prev) }}
+              <div class="mn-baseline">{{ weekly_review.miles_planned }} planned</div>
+            </div>
+            <div class="mn-cell">
+              <div class="mn-kicker">Avg recovery</div>
+              <div class="mn-value">{{ weekly_review.recovery }}</div>
+              {{ dev_bar(weekly_review.recovery, weekly_review.recovery_prev) }}
+              <div class="mn-baseline">{{ weekly_review.recovery_prev }} the week before</div>
+            </div>
+            <div class="mn-cell">
+              <div class="mn-kicker">Habits</div>
+              <div class="mn-value">{{ weekly_review.habit_pct }}%</div>
+            </div>
+          </div>
+          <div class="mn-section">
+            <p style="margin: 0; font-size: 13.5px; line-height: 1.5;">{{ weekly_review.note }}</p>
+          </div>
+        </div>
+        <div class="mn-sheet-foot">
+          <button type="button" id="weekly-dismiss" class="mn-btn mn-btn-ghost">NOT NOW</button>
+          <a class="mn-btn mn-btn-primary mn-btn-block" href="/review" style="flex: 1;">FULL REVIEW</a>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {# Habit journal — same form fields journal.py's QUESTIONS drive, one
+     question at a time. The whole form is still submitted as one unit. #}
+  <div id="journal-modal" class="mn-sheet-overlay" hidden>
+    <div class="mn-sheet" role="dialog" aria-modal="true" aria-labelledby="journal-title">
+      <div class="mn-sheet-head">
+        <div class="mn-kicker" style="color: var(--accent-deep);">{{ metrics.journal_date }}</div>
+        <h2 id="journal-title" class="mn-display" style="margin: 3px 0 0; font-size: 26px;">Habit journal</h2>
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
+          <div class="mn-progress"><span id="journal-progress" style="width: 0%"></span></div>
+          <div id="journal-count" class="mn-kicker">0/{{ journal_questions | length }}</div>
+        </div>
+      </div>
+      <form id="journal-form" style="display: contents;">
+        <input type="hidden" name="entry_date" value="{{ metrics.journal_date }}" />
+        <div class="mn-sheet-body">
+          <div class="habit-list">
+            {% for q in journal_questions %}
+              <label class="habit-row mn-step" data-key="{{ q.key }}" data-kind="{{ q.kind }}"{% if q.show_if %} data-show-if="{{ q.show_if }}"{% endif %} hidden>
+                <span class="mn-step-label">{{ q.label }}</span>
+                <span class="mn-step-input">
+                  {% if q.kind == "bool" %}
+                    <input type="checkbox" name="{{ q.key }}" {{ "checked" if journal_values[q.key] }} />
+                  {% elif q.kind == "number" %}
+                    <input type="number" name="{{ q.key }}" step="0.5" min="0" inputmode="decimal"
+                           value="{{ journal_values[q.key] if journal_values[q.key] is not none else '' }}" />
+                  {% elif q.kind == "time" %}
+                    <input type="time" name="{{ q.key }}" value="{{ journal_values[q.key] or '' }}" />
+                  {% endif %}
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="mn-sheet-foot">
+          <button type="button" id="journal-back" class="mn-btn mn-btn-ghost">← BACK</button>
+          <button type="button" id="journal-next" class="mn-btn mn-btn-primary" style="flex: 1;">NEXT</button>
+          <button type="submit" id="journal-save" class="mn-btn mn-btn-primary" style="flex: 1;" hidden>SAVE</button>
         </div>
       </form>
     </div>
@@ -180,55 +190,71 @@
 {% block scripts %}
   <script>
     (function () {
-      const modal = document.getElementById("journal-modal");
+      const journal = document.getElementById("journal-modal");
+      const weekly = document.getElementById("weekly-sheet");
       const form = document.getElementById("journal-form");
-      const savedNote = document.getElementById("journal-saved-note");
       const entryDate = form.entry_date.value;
-      const dismissKey = `journal-dismissed-${entryDate}`;
+      const dismissKey = "journal-dismissed-" + entryDate;
+      const weeklyKey = "weekly-dismissed-" + (weekly ? weekly.dataset.week || entryDate : "");
 
-      const openModal = () => { modal.hidden = false; };
-      const closeModal = () => { modal.hidden = true; };
+      const openJournal = () => { journal.hidden = false; };
+      const closeJournal = () => { journal.hidden = true; };
+      document.getElementById("journal-row").addEventListener("click", openJournal);
+      document.getElementById("journal-open").addEventListener("click", openJournal);
 
-      document.getElementById("journal-open").addEventListener("click", openModal);
-      document.getElementById("journal-close").addEventListener("click", closeModal);
-      document.getElementById("journal-dismiss").addEventListener("click", () => {
-        localStorage.setItem(dismissKey, "1");
-        closeModal();
-      });
+      // Conditional questions (drink count / last drink) drop out of the
+      // sequence entirely when their parent bool is false.
+      const steps = Array.from(form.querySelectorAll(".mn-step"));
+      const parentOf = (step) => step.dataset.showIf;
+      const isVisible = (step) => {
+        const parent = parentOf(step);
+        if (!parent) return true;
+        const input = form.querySelector('[name="' + parent + '"]');
+        return !!(input && input.checked);
+      };
+      let index = 0;
 
-      // Conditional rows (drink count / time of last drink only matter if
-      // "Drink alcohol?" is checked) — wire up show/hide per parent key.
-      const parentKeys = new Set(
-        Array.from(form.querySelectorAll("[data-show-if]")).map((row) => row.dataset.showIf)
-      );
-      parentKeys.forEach((parentKey) => {
-        const parentInput = form.querySelector(`[name="${parentKey}"]`);
-        if (!parentInput) return;
-        const dependents = form.querySelectorAll(`[data-show-if="${parentKey}"]`);
-        const sync = () => dependents.forEach((row) => { row.hidden = !parentInput.checked; });
-        parentInput.addEventListener("change", sync);
-        sync();
-      });
+      const render = () => {
+        const live = steps.filter(isVisible);
+        if (index >= live.length) index = live.length - 1;
+        steps.forEach((s) => { s.hidden = true; });
+        const current = live[index];
+        if (current) current.hidden = false;
+        const total = live.length;
+        document.getElementById("journal-count").textContent = index + "/" + total;
+        document.getElementById("journal-progress").style.width = Math.round((index / total) * 100) + "%";
+        const last = index === total - 1;
+        document.getElementById("journal-next").hidden = last;
+        document.getElementById("journal-save").hidden = !last;
+      };
+
+      document.getElementById("journal-next").addEventListener("click", () => { index += 1; render(); });
+      document.getElementById("journal-back").addEventListener("click", () => { index = Math.max(0, index - 1); render(); });
+      form.addEventListener("change", render);
+      render();
 
       form.addEventListener("submit", async (evt) => {
         evt.preventDefault();
         const response = await fetch("/journal", { method: "POST", body: new FormData(form) });
         if (response.ok) {
           localStorage.setItem(dismissKey, "1");
-          savedNote.hidden = false;
-          setTimeout(() => {
-            savedNote.hidden = true;
-            closeModal();
-          }, 700);
+          closeJournal();
+          location.reload();
         }
       });
 
-      const alreadySubmitted = {{ "true" if journal_already_submitted else "false" }};
-      if (!alreadySubmitted && !localStorage.getItem(dismissKey)) {
-        openModal();
+      // Monday: the weekly review comes first, the journal follows it.
+      const journalPending = {{ "false" if journal_already_submitted else "true" }} && !localStorage.getItem(dismissKey);
+      if (weekly && !localStorage.getItem(weeklyKey)) {
+        weekly.hidden = false;
+        document.getElementById("weekly-dismiss").addEventListener("click", () => {
+          localStorage.setItem(weeklyKey, "1");
+          weekly.hidden = true;
+          if (journalPending) openJournal();
+        });
+      } else if (journalPending) {
+        openJournal();
       }
     })();
-
-    document.getElementById("refresh").addEventListener("click", () => location.reload());
   </script>
 {% endblock %}

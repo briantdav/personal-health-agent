@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Weekly review{% endblock %}
+
+{% block body %}
+  <div class="page">
+    <header class="mn-section">
+      <div class="mn-kicker">Week of {{ review.week_label }}{% if review.closed %} · closed{% endif %}</div>
+      <h1 class="mn-display" style="margin: 3px 0 0;">{{ review.headline }}</h1>
+    </header>
+
+    <section class="mn-strip" aria-label="Week totals">
+      <div class="mn-cell">
+        <div class="mn-kicker">Miles</div>
+        <div class="mn-value">{{ review.miles }}</div>
+        <div class="mn-baseline">{{ review.miles_planned }} planned</div>
+      </div>
+      <div class="mn-cell">
+        <div class="mn-kicker">Avg recovery</div>
+        <div class="mn-value">{{ review.recovery }}</div>
+        <div class="mn-baseline">{{ review.recovery_prev }} week before</div>
+      </div>
+      <div class="mn-cell">
+        <div class="mn-kicker">Avg sleep</div>
+        <div class="mn-value">{{ review.sleep }}<small>h</small></div>
+        <div class="mn-baseline">{{ review.sleep_prev }}h week before</div>
+      </div>
+    </section>
+
+    <section class="mn-section" aria-label="Sessions">
+      <div class="mn-kicker">Sessions</div>
+      <div style="margin-top: 8px;">
+        {% for s in review.sessions %}
+          <div class="mn-row">
+            <span>{{ s.day }} · {{ s.title }}</span>
+            <b>{% if s.miles %}{{ "%.1f"|format(s.miles) }} mi{% if s.pace %} · {{ s.pace }}{% endif %}{% else %}—{% endif %}</b>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="mn-section" aria-label="Habits">
+      <div style="display: flex; align-items: baseline; justify-content: space-between;">
+        <div class="mn-kicker">Habits</div>
+        <b style="font-size: 11px;">{{ review.habit_pct }}%</b>
+      </div>
+      <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px;">
+        <div class="mn-grid-row">
+          <div class="mn-grid-label"></div>
+          <div class="mn-grid-cells">
+            {% for d in review.day_letters %}<div class="mn-grid-head">{{ d }}</div>{% endfor %}
+          </div>
+        </div>
+        {% for habit in review.habits %}
+          <div class="mn-grid-row">
+            <div class="mn-grid-label">{{ habit.label }}</div>
+            <div class="mn-grid-cells">
+              {% for day in habit.days %}
+                <div class="mn-cellbox{% if day and habit.flag %} flag{% elif day %} done{% endif %}"
+                     title="{{ habit.label }} — {{ review.day_letters[loop.index0] }}"></div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="mn-baseline">Filled = done. Red = the habits you're cutting.</div>
+    </section>
+
+    {% if review.note %}
+      <section class="mn-section" aria-label="What the week showed">
+        <div class="mn-kicker">What the week showed</div>
+        <p style="margin: 8px 0 0; font-size: 13.5px; line-height: 1.5;">{{ review.note }}</p>
+      </section>
+    {% endif %}
+
+    <section class="mn-section" style="border-bottom: 0;" aria-label="This week">
+      <div class="mn-kicker">Week of {{ review.next_week_label }}</div>
+      <div style="font-size: 19px; font-weight: 800; margin-top: 5px;">{{ review.next_week_summary }}</div>
+    </section>
+  </div>
+{% endblock %}

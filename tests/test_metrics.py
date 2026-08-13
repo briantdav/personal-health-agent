@@ -189,6 +189,7 @@ def test_get_todays_training_plan_uses_workout_title(mock_scheduled_run):
     assert metrics.get_todays_training_plan("2026-08-12") == {
         "summary": "Long Run + Effort",
         "details": None,
+        "sport": "Run",
     }
 
 
@@ -196,7 +197,19 @@ def test_get_todays_training_plan_uses_workout_title(mock_scheduled_run):
 def test_get_todays_training_plan_defaults_to_rest_day(mock_scheduled_run):
     mock_scheduled_run.return_value = None
 
-    assert metrics.get_todays_training_plan("2026-08-12") == {"summary": "Rest Day", "details": None}
+    assert metrics.get_todays_training_plan("2026-08-12") == {
+        "summary": "Rest Day",
+        "details": None,
+        "sport": None,
+    }
+
+
+@pytest.mark.parametrize(
+    "status,call",
+    [("good", None), ("warning", None), ("serious", "Ease up today"), ("critical", "Back off today"), (None, None)],
+)
+def test_verdict_call_bands(status, call):
+    assert metrics._verdict_call(status) == call
 
 
 @patch("src.tools.garmin.get_scheduled_workouts_for_month")
@@ -255,12 +268,13 @@ def test_get_dashboard_metrics_aggregates_everything(
 
     # 2026-07-20 is within the 30d window ending 2026-08-11 (starts 07-13)
     # but outside the 7d window (starts 08-05) — exercises both at once.
-    _seed(("2026-07-20", {"sleep_score": 70, "miles": 3.0}))
+    _seed(("2026-07-20", {"sleep_score": 70, "miles": 3.0, "body_battery_peak": 90}))
 
     result = metrics.get_dashboard_metrics("2026-08-12")
 
     assert result["date"] == "2026-08-12"
     assert result["activity_date"] == "2026-08-11"
+    assert result["journal_date"] == "2026-08-12"  # today, not yesterday — see metrics.py
     assert result["miles"] == 1.0
     assert result["miles_totals"] == {"total_7d": 0.0, "total_30d": 3.0}
     assert result["sleep_hours"] == 7.0
@@ -274,9 +288,12 @@ def test_get_dashboard_metrics_aggregates_everything(
     assert result["recovery_score"] == 82
     assert result["recovery_level"] == "HIGH"
     assert result["recovery_status"] == "good"
+    assert result["verdict_call"] is None  # "good" status has no override — template defaults it
+    assert result["coach_note"] is None
     assert result["body_battery"] == 96
     assert result["body_battery_band"] == {"status": "good", "label": "Excellent"}
-    assert result["training_plan"] == {"summary": "Easy + Strides", "details": None}
+    assert result["body_battery_avg_7d"] is None  # 07-20 is outside the 7d window ending 08-11
+    assert result["training_plan"] == {"summary": "Easy + Strides", "details": None, "sport": "Run"}
 
 
 @patch("src.tools.garmin.get_scheduled_workouts_for_month")
@@ -307,4 +324,6 @@ def test_get_dashboard_metrics_degrades_on_endpoint_errors(
     assert result["recovery_status"] is None
     assert result["body_battery"] is None
     assert result["body_battery_band"] == {"status": "unknown", "label": None}
-    assert result["training_plan"] == {"summary": "Rest Day", "details": None}
+    assert result["body_battery_avg_7d"] is None
+    assert result["verdict_call"] is None
+    assert result["training_plan"] == {"summary": "Rest Day", "details": None, "sport": None}

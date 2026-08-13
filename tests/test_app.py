@@ -41,6 +41,9 @@ _NO_TREND = {"avg_7d": None, "avg_30d": None, "trend_7d": None, "trend_30d": Non
 FAKE_METRICS = {
     "date": "2026-08-12",
     "activity_date": "2026-08-11",
+    "journal_date": "2026-08-12",
+    "verdict_call": None,
+    "coach_note": None,
     "miles": 4.2,
     "miles_totals": {"total_7d": 18.5, "total_30d": 62.0},
     "workout_hours": 0.75,
@@ -58,28 +61,29 @@ FAKE_METRICS = {
     "recovery_score_trend": {"avg_7d": 65, "avg_30d": 60, "trend_7d": "up", "trend_30d": "up"},
     "body_battery": 96,
     "body_battery_band": {"status": "good", "label": "Excellent"},
+    "body_battery_avg_7d": 88,
     "hrv": 80,
     "hrv_trend": _NO_TREND,
-    "training_plan": {"summary": "Rest day.", "details": None},
+    "training_plan": {"summary": "Rest day.", "details": None, "sport": None},
 }
 
 
+@patch("src.web.app.weekly.is_review_day", return_value=False)
 @patch("src.web.app.get_dashboard_metrics", return_value=FAKE_METRICS)
-def test_dashboard_renders_metrics(mock_metrics):
+def test_dashboard_renders_metrics(mock_metrics, mock_is_review_day):
     response = client.get("/")
 
     assert response.status_code == 200
     assert "Personal Health Portal" in response.text
     assert "Good " in response.text  # the time-of-day greeting
-    assert "Sleep &amp; Recovery Snapshot" in response.text
-    assert "Yesterday's Recap" in response.text
-    assert "Total Activity" in response.text
-    assert "4.2" in response.text
+    assert "Recovery verdict" in response.text
+    assert "Today's training" in response.text
+    assert "Yesterday" in response.text
+    assert "4.2" in response.text  # miles, in the recap row
     assert "Rest day." in response.text
-    assert "78" in response.text  # sleep score, in the ring on the Sleep tile
-    assert "80" in response.text  # HRV, its own tile
-    assert "96" in response.text  # body battery, in the ring on the Recovery tile
-    assert "Excellent" in response.text  # body battery band label
+    assert "82" in response.text  # recovery score, in the verdict block
+    assert "80" in response.text  # HRV, its own strip cell
+    assert "96" in response.text  # body battery, its own strip cell
 
 
 @patch("src.web.app.get_dashboard_metrics", return_value=FAKE_METRICS)
@@ -127,8 +131,9 @@ def test_api_trends_returns_json(mock_trends):
     mock_trends.assert_called_once_with(30)
 
 
+@patch("src.web.app.weekly.is_review_day", return_value=False)
 @patch("src.web.app.get_dashboard_metrics", return_value=FAKE_METRICS)
-def test_dashboard_renders_journal_modal_with_all_questions(mock_metrics):
+def test_dashboard_renders_journal_modal_with_all_questions(mock_metrics, mock_is_review_day):
     response = client.get("/")
 
     assert response.status_code == 200
@@ -191,14 +196,56 @@ def test_service_worker_is_served():
     assert "install" in response.text
 
 
+@patch("src.web.app.weekly.is_review_day", return_value=False)
 @patch("src.web.app.get_dashboard_metrics", return_value=FAKE_METRICS)
-def test_dashboard_includes_pwa_head_tags(mock_metrics):
+def test_dashboard_includes_pwa_head_tags(mock_metrics, mock_is_review_day):
     response = client.get("/")
 
     assert response.status_code == 200
     assert 'rel="manifest"' in response.text
     assert "apple-mobile-web-app-capable" in response.text
     assert "viewport-fit=cover" in response.text
+
+
+@patch("src.web.app.weekly.is_review_day", return_value=True)
+@patch("src.web.app.get_dashboard_metrics", return_value=FAKE_METRICS)
+def test_dashboard_shows_weekly_review_sheet_on_review_day(mock_metrics, mock_is_review_day):
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'id="weekly-sheet"' in response.text
+    assert 'data-week=' in response.text
+
+
+FAKE_REVIEW = {
+    "week_label": "3 Aug",
+    "next_week_label": "10 Aug",
+    "closed": True,
+    "headline": "18.3 miles, recovery steady",
+    "miles": 18.3,
+    "miles_planned": 20,
+    "miles_prev": 15.0,
+    "recovery": 74,
+    "recovery_prev": 70,
+    "sleep": 7.2,
+    "sleep_prev": 6.9,
+    "habit_pct": 71,
+    "habits": [{"key": "drank_alcohol", "label": "Alcohol", "days": [False] * 7, "flag": True}],
+    "day_letters": ["M", "T", "W", "T", "F", "S", "S"],
+    "sessions": [{"day": "Mon", "title": "Run", "miles": 4.0, "pace": None}],
+    "note": None,
+    "next_week_summary": "Plan not synced yet",
+}
+
+
+@patch("src.web.app.weekly.get_weekly_review", return_value=FAKE_REVIEW)
+def test_review_page_renders(mock_review):
+    response = client.get("/review")
+
+    assert response.status_code == 200
+    assert "Week of 3 Aug" in response.text
+    assert "18.3" in response.text
+    assert "Alcohol" in response.text
 
 
 @patch("src.web.app.get_trends", return_value=FAKE_TRENDS)

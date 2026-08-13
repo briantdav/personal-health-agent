@@ -147,6 +147,19 @@ def is_running_activity(activity: dict[str, Any]) -> bool:
     return activity_type.get("typeId") == 1 or activity_type.get("parentTypeId") == 1
 
 
+def get_scheduled_workouts_for_month(year: int, month: int) -> list[dict[str, Any]]:
+    """Garmin's calendar for a month — workouts, races, and other calendar
+    items (only month granularity; no day-range endpoint exists). Each
+    item has a "date", "title", "itemType" ("workout", "race", ...), and
+    for workouts a "sportTypeKey" (e.g. "running") — filter on those to
+    find e.g. today's scheduled run. This is what a coach's TrainingPeaks
+    plan looks like once TrainingPeaks has synced it down to the Garmin
+    calendar; empty (or missing today) just means nothing's scheduled
+    there, not necessarily an error."""
+    data = get_client().get_scheduled_workouts(year, month)
+    return (data or {}).get("calendarItems") or []
+
+
 # --- Bulk-range endpoints, for pulling history (see src/history/sync.py) ---
 #
 # Garmin has genuine range endpoints for these, unlike the single-day

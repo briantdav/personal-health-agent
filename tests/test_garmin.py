@@ -93,6 +93,31 @@ def test_is_running_activity_missing_activity_type():
 
 
 @patch("src.tools.garmin.get_client")
+def test_get_scheduled_workouts_for_month_returns_calendar_items(mock_get_client):
+    mock_client = MagicMock()
+    mock_client.get_scheduled_workouts.return_value = {
+        "month": 7,
+        "year": 2026,
+        "calendarItems": [{"date": "2026-08-14", "title": "Easy + Strides", "sportTypeKey": "running"}],
+    }
+    mock_get_client.return_value = mock_client
+
+    result = garmin.get_scheduled_workouts_for_month(2026, 8)
+
+    mock_client.get_scheduled_workouts.assert_called_once_with(2026, 8)
+    assert result == [{"date": "2026-08-14", "title": "Easy + Strides", "sportTypeKey": "running"}]
+
+
+@patch("src.tools.garmin.get_client")
+def test_get_scheduled_workouts_for_month_handles_no_calendar_items_key(mock_get_client):
+    mock_client = MagicMock()
+    mock_client.get_scheduled_workouts.return_value = {"month": 7, "year": 2026}
+    mock_get_client.return_value = mock_client
+
+    assert garmin.get_scheduled_workouts_for_month(2026, 8) == []
+
+
+@patch("src.tools.garmin.get_client")
 def test_snapshot_aggregates_all_metrics(mock_get_client):
     mock_client = MagicMock()
     mock_client.get_user_summary.return_value = {"totalSteps": 1234}

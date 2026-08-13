@@ -171,16 +171,35 @@ def _totals_info(end_day: str, field: str, decimals: int = 2) -> dict[str, Any]:
     }
 
 
-def get_todays_training_plan(day: date | str | None = None) -> dict[str, Any]:
-    """Placeholder until src/agent.py can generate a real recommendation.
+def _scheduled_run(day_iso: str) -> dict[str, Any] | None:
+    """Today's scheduled run from the Garmin calendar — itself fed by the
+    coach's TrainingPeaks plan once TrainingPeaks has synced it down to
+    Garmin — or None if nothing's there (a real rest day, the sync
+    hasn't caught up yet, or the endpoint errored). Only itemType
+    "workout" with sportTypeKey "running" counts; races, other sports,
+    and non-workout calendar items (badges, events, ...) don't."""
+    year, month = int(day_iso[:4]), int(day_iso[5:7])
+    try:
+        items = garmin.get_scheduled_workouts_for_month(year, month)
+    except GARMIN_ERRORS:
+        return None
+    for item in items:
+        if item.get("date") == day_iso and item.get("itemType") == "workout" and item.get("sportTypeKey") == "running":
+            return item
+    return None
 
-    Wire this up to real logic (rule-based or LLM, using this same day's
-    recovery/sleep data plus the morning journal) once that exists.
+
+def get_todays_training_plan(day: date | str | None = None) -> dict[str, Any]:
+    """Today's run, pulled from the Garmin calendar — "Rest Day" if
+    nothing's scheduled there. Run workouts only, for now: strength and
+    everything else will come from a different source once that's built,
+    and until then this card only speaks to running.
     """
-    return {
-        "summary": "Training plan generation isn't wired up yet.",
-        "details": None,
-    }
+    day_iso = garmin.to_iso_date(day)
+    run = _scheduled_run(day_iso)
+    if run is None:
+        return {"summary": "Rest Day", "details": None}
+    return {"summary": run.get("title") or "Scheduled run", "details": None}
 
 
 def get_dashboard_metrics(day: date | str | None = None) -> dict[str, Any]:

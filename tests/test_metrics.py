@@ -145,38 +145,97 @@ def test_trend(value, avg, expected):
     assert metrics._trend(value, avg) == expected
 
 
+@patch("src.tools.garmin.get_scheduled_workouts_for_month")
+def test_scheduled_run_matches_running_workout_on_the_date(mock_calendar):
+    mock_calendar.return_value = [
+        {"date": "2026-08-11", "itemType": "workout", "sportTypeKey": "running", "title": "yesterday, not today"},
+        {"date": "2026-08-12", "itemType": "workout", "sportTypeKey": "running", "title": "Easy + Strides"},
+    ]
+
+    run = metrics._scheduled_run("2026-08-12")
+
+    mock_calendar.assert_called_once_with(2026, 8)
+    assert run["title"] == "Easy + Strides"
+
+
+@patch("src.tools.garmin.get_scheduled_workouts_for_month")
+def test_scheduled_run_ignores_non_running_and_non_workout_items(mock_calendar):
+    mock_calendar.return_value = [
+        {"date": "2026-08-12", "itemType": "workout", "sportTypeKey": "strength_training", "title": "Lift"},
+        {"date": "2026-08-12", "itemType": "race", "sportTypeKey": "running", "title": "5K"},
+    ]
+
+    assert metrics._scheduled_run("2026-08-12") is None
+
+
+@patch("src.tools.garmin.get_scheduled_workouts_for_month")
+def test_scheduled_run_none_when_calendar_empty(mock_calendar):
+    mock_calendar.return_value = []
+
+    assert metrics._scheduled_run("2026-08-12") is None
+
+
+@patch("src.tools.garmin.get_scheduled_workouts_for_month")
+def test_scheduled_run_none_on_garmin_error(mock_calendar):
+    mock_calendar.side_effect = garmin.GarminConnectConnectionError("boom")
+
+    assert metrics._scheduled_run("2026-08-12") is None
+
+
+@patch("src.web.metrics._scheduled_run")
+def test_get_todays_training_plan_uses_workout_title(mock_scheduled_run):
+    mock_scheduled_run.return_value = {"title": "Long Run + Effort"}
+
+    assert metrics.get_todays_training_plan("2026-08-12") == {
+        "summary": "Long Run + Effort",
+        "details": None,
+    }
+
+
+@patch("src.web.metrics._scheduled_run")
+def test_get_todays_training_plan_defaults_to_rest_day(mock_scheduled_run):
+    mock_scheduled_run.return_value = None
+
+    assert metrics.get_todays_training_plan("2026-08-12") == {"summary": "Rest Day", "details": None}
+
+
+@patch("src.tools.garmin.get_scheduled_workouts_for_month")
 @patch("src.tools.garmin.get_morning_recovery")
 @patch("src.tools.garmin.get_daily_summary")
 @patch("src.tools.garmin.get_hrv")
 @patch("src.tools.garmin.get_sleep")
 @patch("src.tools.garmin.get_activities_for_date")
 def test_get_dashboard_metrics_pulls_activities_for_the_day_before(
-    mock_activities, mock_sleep, mock_hrv, mock_summary, mock_recovery
+    mock_activities, mock_sleep, mock_hrv, mock_summary, mock_recovery, mock_calendar
 ):
     mock_activities.return_value = []
     mock_sleep.return_value = {}
     mock_hrv.return_value = None
     mock_summary.return_value = {}
     mock_recovery.return_value = None
+    mock_calendar.return_value = []
 
     metrics.get_dashboard_metrics("2026-08-12")
 
     mock_activities.assert_called_once_with("2026-08-11")
-    # Sleep/HRV/body battery/recovery stay keyed to the passed-in day
-    # (Garmin already attributes the overnight reading to the wake-up date).
+    # Sleep/HRV/body battery/recovery/calendar stay keyed to the passed-in
+    # day (Garmin already attributes the overnight reading to the wake-up
+    # date, and a scheduled run is naturally about today, not yesterday).
     mock_sleep.assert_called_once_with("2026-08-12")
     mock_hrv.assert_called_once_with("2026-08-12")
     mock_summary.assert_called_once_with("2026-08-12")
     mock_recovery.assert_called_once_with("2026-08-12")
+    mock_calendar.assert_called_once_with(2026, 8)
 
 
+@patch("src.tools.garmin.get_scheduled_workouts_for_month")
 @patch("src.tools.garmin.get_morning_recovery")
 @patch("src.tools.garmin.get_daily_summary")
 @patch("src.tools.garmin.get_hrv")
 @patch("src.tools.garmin.get_sleep")
 @patch("src.tools.garmin.get_activities_for_date")
 def test_get_dashboard_metrics_aggregates_everything(
-    mock_activities, mock_sleep, mock_hrv, mock_summary, mock_recovery
+    mock_activities, mock_sleep, mock_hrv, mock_summary, mock_recovery, mock_calendar
 ):
     mock_activities.return_value = [{"distance": 1609.344, "duration": 600, "activityType": RUNNING}]
     mock_sleep.return_value = {
@@ -190,6 +249,9 @@ def test_get_dashboard_metrics_aggregates_everything(
     mock_hrv.return_value = {"hrvSummary": {"lastNightAvg": 80}}
     mock_summary.return_value = {"bodyBatteryHighestValue": 96}
     mock_recovery.return_value = {"score": 82, "level": "HIGH"}
+    mock_calendar.return_value = [
+        {"date": "2026-08-12", "itemType": "workout", "sportTypeKey": "running", "title": "Easy + Strides"}
+    ]
 
     # 2026-07-20 is within the 30d window ending 2026-08-11 (starts 07-13)
     # but outside the 7d window (starts 08-05) — exercises both at once.
@@ -214,22 +276,24 @@ def test_get_dashboard_metrics_aggregates_everything(
     assert result["recovery_status"] == "good"
     assert result["body_battery"] == 96
     assert result["body_battery_band"] == {"status": "good", "label": "Excellent"}
-    assert "training_plan" in result
+    assert result["training_plan"] == {"summary": "Easy + Strides", "details": None}
 
 
+@patch("src.tools.garmin.get_scheduled_workouts_for_month")
 @patch("src.tools.garmin.get_morning_recovery")
 @patch("src.tools.garmin.get_daily_summary")
 @patch("src.tools.garmin.get_hrv")
 @patch("src.tools.garmin.get_sleep")
 @patch("src.tools.garmin.get_activities_for_date")
 def test_get_dashboard_metrics_degrades_on_endpoint_errors(
-    mock_activities, mock_sleep, mock_hrv, mock_summary, mock_recovery
+    mock_activities, mock_sleep, mock_hrv, mock_summary, mock_recovery, mock_calendar
 ):
     mock_activities.side_effect = garmin.GarminConnectConnectionError("boom")
     mock_sleep.side_effect = garmin.GarminConnectConnectionError("boom")
     mock_hrv.side_effect = garmin.GarminConnectConnectionError("boom")
     mock_summary.side_effect = garmin.GarminConnectConnectionError("boom")
     mock_recovery.side_effect = garmin.GarminConnectConnectionError("boom")
+    mock_calendar.side_effect = garmin.GarminConnectConnectionError("boom")
 
     result = metrics.get_dashboard_metrics("2026-08-12")
 
@@ -243,3 +307,4 @@ def test_get_dashboard_metrics_degrades_on_endpoint_errors(
     assert result["recovery_status"] is None
     assert result["body_battery"] is None
     assert result["body_battery_band"] == {"status": "unknown", "label": None}
+    assert result["training_plan"] == {"summary": "Rest Day", "details": None}

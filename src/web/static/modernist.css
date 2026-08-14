@@ -134,6 +134,22 @@ h1, h2, h3, .num { font-weight: 800; letter-spacing: -0.015em; }
 .mn-value { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
 .mn-value small { font-size: 12px; font-weight: 400; }
 
+/* RECOVER/TRAIN in the bottom tab bar are in-page anchors into sections
+   already on this page (see base.html), not separate routes — tapping one
+   when its section is already on-screen (common on a short page / tall
+   phone) would otherwise produce zero visible feedback, especially in an
+   installed PWA where there's no address bar to show the URL changed.
+   :target fires whenever the URL fragment matches the section's id,
+   scroll-independent, so the tap always visibly confirms itself. */
+#recovery:target,
+#training:target {
+  animation: mn-target-flash 1000ms ease-out;
+}
+@keyframes mn-target-flash {
+  0% { background: var(--accent-tint); }
+  100% { background: transparent; }
+}
+
 /* Today's value measured from the 7-day average: the tick is the average,
    the bar runs right (above) or left (below); a dot means "on it". Below-
    average renders in the same muted ink as "flat" — see --habit-flag
